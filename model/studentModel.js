@@ -38,11 +38,12 @@ const studentSchema = new mongoose.Schema(
     // 🚌 Transport
     transport: {
       type: String,
+      default: "N/A",
     },
-    vehicle: { type: String },
+    vehicle: { type: String, default: "N/A" },
 
     // 💰 Fee / Discount
-    discount: { type: String },
+    discount: { type: String ,default: "N/A" },
 
     // 📄 Documents
     tc: {
@@ -67,7 +68,7 @@ const studentSchema = new mongoose.Schema(
     },
 
     // 🖼️ Student Photo
-    photo: { type: String }, // file path / url
+    photo: { type: String , default: "N/A"}, // file path / url
 
     // 🔗 Ledger Reference (IMPORTANT – keep this)
     ledgerId: {

@@ -1,17 +1,24 @@
 import express from "express";
+import multer from "multer";
 import {
+  bulkStudentApplyController,
   createStudent,
   deleteStudent,
   getAllStudents,
   getSingleStudent,
   searchStudent,
-  updateStudent
+  updateStudent,
 } from "../controller/studentController.js";
 
 const router = express.Router();
+const storage = multer.memoryStorage();
+const upload = multer({ storage: storage });
 
 // ➕ Create Student
 router.post("/create", createStudent);
+
+//BULK ADD BY EXCEL
+router.post("/bulk-apply", upload.single("file"), bulkStudentApplyController);
 
 //SERACH STUDENT BY SESSION, ROLL NO, CLASS AND NAME
 router.post("/search", searchStudent);
