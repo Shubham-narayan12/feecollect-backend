@@ -37,12 +37,6 @@ const adminSchema = new mongoose.Schema(
       default: "ADMIN",
     },
 
-    // 🏫 Scope / Control
-    schoolName: {
-      type: String,
-      default: "N/A",
-    },
-
     isActive: {
       type: Boolean,
       default: true,
