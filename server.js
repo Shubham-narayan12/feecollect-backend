@@ -17,6 +17,7 @@ import studentRoutes from "./routes/studentRoutes.js";
 import feeCollectRoutes from "./routes/feeCollectRoutes.js";
 import feeStructureRoutes from "./routes/feeStructureRoutes.js";
 import receiptRoutes from "./routes/receiptRoutes.js";
+import adminRoutes from "./routes/adminRoutes.js";
 
 // Connect to database
 connectDb();
@@ -58,6 +59,7 @@ app.use("/api/v1/student", studentRoutes);
 app.use("/api/v1/feecollect", feeCollectRoutes);
 app.use("/api/v1/feestructure", feeStructureRoutes);
 app.use("/api/v1/receipt", receiptRoutes);
+app.use("/api/v1/admin", adminRoutes);
 
 // Test Route
 app.get("/", (req, res) => {

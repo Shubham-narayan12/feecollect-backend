@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
+import JWT from "jsonwebtoken";
 
 const adminSchema = new mongoose.Schema(
   {
@@ -45,14 +46,6 @@ const adminSchema = new mongoose.Schema(
     lastLogin: {
       type: Date,
     },
-
-    // 🔑 Permissions (future-proof)
-    permissions: {
-      canCreateStudent: { type: Boolean, default: true },
-      canBulkUpload: { type: Boolean, default: true },
-      canManageFees: { type: Boolean, default: true },
-      canViewReports: { type: Boolean, default: true },
-    },
   },
   { timestamps: true }
 );
@@ -60,17 +53,23 @@ const adminSchema = new mongoose.Schema(
 //
 // 🔐 Password Hash (before save)
 //
-adminSchema.pre("save", async function (next) {
-  if (!this.isModified("password")) return next();
+adminSchema.pre("save", async function () {
+  if (!this.isModified("password")) return;
   this.password = await bcrypt.hash(this.password, 10);
-  next();
 });
 
-//
+
 // 🔑 Compare Password (login ke liye)
 //
 adminSchema.methods.comparePassword = async function (enteredPassword) {
   return await bcrypt.compare(enteredPassword, this.password);
+};
+
+//JWT TOKEN
+adminSchema.methods.generateToken = function () {
+  return JWT.sign({ _id: this._id, role: this.role }, process.env.JWT_SECRET, {
+    expiresIn: "7d",
+  });
 };
 
 export default mongoose.model("Admin", adminSchema);
