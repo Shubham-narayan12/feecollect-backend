@@ -14,7 +14,7 @@ const MonthlyRecordSchema = new mongoose.Schema({
 });
 
 const ExtraFeeSchema = new mongoose.Schema({
-  title: { type: String, required: true }, // "Exam Fee", "Uniform"
+  title: { type: String, required: true }, // "Exam Fee", "Uniform" ,"extra fee"
   amount: { type: Number, required: true },
   date: { type: Date, default: Date.now },
   status: {

@@ -104,7 +104,7 @@ export const collectFee = async (req, res) => {
             (monthRecord.tuitionFee || 0) + (monthRecord.transportFee || 0);
 
           monthRecord.paidAmount = monthTotal;
-          monthRecord.dueAmount = 0;
+          
           monthRecord.status = "Paid";
 
           totalBill += monthTotal;
@@ -117,7 +117,6 @@ export const collectFee = async (req, res) => {
             tuitionFee: m.tuitionFee || 0,
             transportFee: m.transportFee || 0,
             paidAmount: monthTotal,
-            dueAmount: 0,
             status: "Paid",
           });
           totalBill += monthTotal;
