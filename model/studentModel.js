@@ -3,6 +3,10 @@ import mongoose from "mongoose";
 const studentSchema = new mongoose.Schema(
   {
     // 👦 Basic Info
+    serialNo: {
+      type: Number,
+      unique: true,
+    },
     studentName: { type: String, required: true }, // name
     fatherName: { type: String, required: true },
     motherName: { type: String },
@@ -16,6 +20,15 @@ const studentSchema = new mongoose.Schema(
 
     aadharNo: { type: String, required: true, unique: true },
     mobile: { type: String },
+    fatherPhoto: {
+      type: String,
+      default: null,
+    },
+
+    motherPhoto: {
+      type: String,
+      default: null,
+    },
 
     // 🏫 Academic Info
     session: { type: String, required: true },
@@ -43,7 +56,7 @@ const studentSchema = new mongoose.Schema(
     vehicle: { type: String, default: "N/A" },
 
     // 💰 Fee / Discount
-    discount: { type: String ,default: "N/A" },
+    discount: { type: String, default: "N/A" },
 
     // 📄 Documents
     tc: {
@@ -68,7 +81,7 @@ const studentSchema = new mongoose.Schema(
     },
 
     // 🖼️ Student Photo
-    photo: { type: String , default: "N/A"}, // file path / url
+    photo: { type: String, default: null }, // file path / url
 
     // 🔗 Ledger Reference (IMPORTANT – keep this)
     ledgerId: {

@@ -1,25 +1,77 @@
 import Student from "../model/studentModel.js";
 import { createAutoLedger } from "./FeeLedgerController.js";
 import ExcelJS from "exceljs";
+import cloudinary from "../config/cloudinary.js";
 
-//CREATE STUDENT
+// CREATE STUDENT WITH PHOTOS
 export const createStudent = async (req, res) => {
   try {
-    const student = await Student.create(req.body);
+    const body = req.body;
 
-    // Auto Ledger create
+    // 1️⃣ Create student first (without photos)
+    let student = await Student.create(body);
+
+    // 2️⃣ Upload photos if present
+    if (req.files) {
+      // 👦 Student Photo
+      if (req.files.photo) {
+        const upload = await cloudinary.uploader.upload(
+          req.files.photo[0].path,
+          {
+            folder: "students/photo",
+            public_id: `student_${student.serialNo}`,
+            overwrite: true,
+          }
+        );
+        student.photo = upload.secure_url;
+      }
+
+      // 👨 Father Photo
+      if (req.files.fatherPhoto) {
+        const upload = await cloudinary.uploader.upload(
+          req.files.fatherPhoto[0].path,
+          {
+            folder: "students/father",
+            public_id: `father_${student.serialNo}`,
+            overwrite: true,
+          }
+        );
+        student.fatherPhoto = upload.secure_url;
+      }
+
+      // 👩 Mother Photo
+      if (req.files.motherPhoto) {
+        const upload = await cloudinary.uploader.upload(
+          req.files.motherPhoto[0].path,
+          {
+            folder: "students/mother",
+            public_id: `mother_${student.serialNo}`,
+            overwrite: true,
+          }
+        );
+        student.motherPhoto = upload.secure_url;
+      }
+
+      await student.save();
+    }
+
+    // 3️⃣ Auto Ledger create
     await createAutoLedger(student);
 
     res.status(201).json({
       success: true,
-      message: "Student created + Ledger initialized",
+      message: "Student created with photos + Ledger initialized",
       data: student,
     });
   } catch (error) {
-    console.log(error.message);
-    res.status(500).json({ success: false, message: error.message });
+    console.error(error.message);
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
   }
 };
+
 
 // BULK STUDENT APPLY
 export const bulkStudentApplyController = async (req, res) => {
@@ -42,7 +94,7 @@ export const bulkStudentApplyController = async (req, res) => {
       });
     }
 
-    // ✅ Header normalize
+    // 🔹 Normalize headers
     const headerRow = worksheet.getRow(1);
     const headers = headerRow.values.slice(1).map((h) =>
       (h || "")
@@ -54,7 +106,6 @@ export const bulkStudentApplyController = async (req, res) => {
     );
 
     const rows = [];
-
     worksheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
       if (rowNumber === 1) return;
       const values = row.values.slice(1);
@@ -65,18 +116,20 @@ export const bulkStudentApplyController = async (req, res) => {
       rows.push(obj);
     });
 
-    if (rows.length === 0) {
+    if (!rows.length) {
       return res.status(400).json({
         success: false,
         message: "Excel file is empty",
       });
     }
 
-    // ✅ Existing Aadhar fetch
-    const existingStudents = await Student.find({}, "aadharNo");
+    // 🔹 Fetch existing Aadhar & Serial
+    const existingStudents = await Student.find({}, "aadharNo serialNo").lean();
+
     const existingAadhars = new Set(
-      existingStudents.map((s) => s.aadharNo.trim())
+      existingStudents.map((s) => s.aadharNo?.trim())
     );
+    const existingSerials = new Set(existingStudents.map((s) => s.serialNo));
 
     let successCount = 0;
     let skipCount = 0;
@@ -90,13 +143,27 @@ export const bulkStudentApplyController = async (req, res) => {
       try {
         const row = rows[i];
 
-        if (!row.aadharno) {
-          errors.push(`Row ${i + 2}: Aadhar number missing`);
+        if (!row.serialno) {
+          errors.push(`Row ${i + 2}: Serial No missing`);
           skipCount++;
           continue;
         }
 
+        if (!row.aadharno) {
+          errors.push(`Row ${i + 2}: Aadhar No missing`);
+          skipCount++;
+          continue;
+        }
+
+        const serialNo = Number(row.serialno);
         const aadharNo = String(row.aadharno).trim();
+
+        if (existingSerials.has(serialNo)) {
+          errors.push(`Row ${i + 2}: Serial No already exists (${serialNo})`);
+          skipCount++;
+          continue;
+        }
+
         if (existingAadhars.has(aadharNo)) {
           errors.push(`Row ${i + 2}: Aadhar already exists (${aadharNo})`);
           skipCount++;
@@ -104,13 +171,19 @@ export const bulkStudentApplyController = async (req, res) => {
         }
 
         const studentData = {
+          serialNo,
+
           studentName: row.studentname || "",
           fatherName: row.fathername || "",
           motherName: row.mothername || "",
+
           dob: row.dob || "",
           gender: row.gender || "",
+
           aadharNo,
           mobile: row.mobile || "",
+
+          photo: row.photo || null,
 
           session: row.session || "",
           className: row.class || row.classname || "",
@@ -135,11 +208,10 @@ export const bulkStudentApplyController = async (req, res) => {
           charCert: row.charcert || "No",
           reportCard: row.reportcard || "No",
           dobCert: row.dobcert || "No",
-
-          photo: row.photo || "N/A",
         };
 
         const requiredFields = [
+          "serialNo",
           "studentName",
           "fatherName",
           "dob",
@@ -151,13 +223,14 @@ export const bulkStudentApplyController = async (req, res) => {
 
         const missing = requiredFields.filter((field) => !studentData[field]);
 
-        if (missing.length > 0) {
+        if (missing.length) {
           errors.push(`Row ${i + 2}: Missing fields - ${missing.join(", ")}`);
           skipCount++;
           continue;
         }
 
         studentsToInsert.push(studentData);
+        existingSerials.add(serialNo);
         existingAadhars.add(aadharNo);
         successCount++;
       } catch (err) {
@@ -167,11 +240,10 @@ export const bulkStudentApplyController = async (req, res) => {
     }
 
     // =========================
-    // 💾 INSERT + LEDGER CREATE
+    // 💾 INSERT STUDENTS
     // =========================
     let insertedStudents = [];
-
-    if (studentsToInsert.length > 0) {
+    if (studentsToInsert.length) {
       try {
         insertedStudents = await Student.insertMany(studentsToInsert, {
           ordered: false,
@@ -188,7 +260,9 @@ export const bulkStudentApplyController = async (req, res) => {
       }
     }
 
-    // 🔥 AUTO LEDGER CREATION
+    // =========================
+    // 📒 AUTO LEDGER
+    // =========================
     for (const student of insertedStudents) {
       try {
         await createAutoLedger(student);
@@ -201,7 +275,7 @@ export const bulkStudentApplyController = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: "Bulk upload completed with auto ledger creation",
+      message: "Bulk upload completed successfully",
       totalRows: rows.length,
       inserted: insertedStudents.length,
       skipped: rows.length - insertedStudents.length,

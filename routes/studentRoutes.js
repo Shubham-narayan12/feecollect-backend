@@ -9,13 +9,14 @@ import {
   searchStudent,
   updateStudent,
 } from "../controller/studentController.js";
+import { uploadStudentPhotos } from "../middleware/upload.js";
 
 const router = express.Router();
 const storage = multer.memoryStorage();
 const upload = multer({ storage: storage });
 
 // ➕ Create Student
-router.post("/create", createStudent);
+router.post("/create", uploadStudentPhotos, createStudent);
 
 //BULK ADD BY EXCEL
 router.post("/bulk-apply", upload.single("file"), bulkStudentApplyController);
