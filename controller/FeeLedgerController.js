@@ -1,23 +1,36 @@
 import FeeLedger from "../model/FeeLedgerModel.js";
 import Student from "../model/studentModel.js";
 
-export const createAutoLedger = async (student) => {
+
+//AUTO CREATION
+export const createAutoLedger = async (student, recommendedFees = []) => {
   try {
-    // Check Ledger Exists Already
-    const existingLedger = await FeeLedger.findOne({ studentId: student._id });
+    // 1️⃣ Check Ledger Exists
+    const existingLedger = await FeeLedger.findOne({
+      studentId: student._id,
+    });
     if (existingLedger) {
-      console.log("Ledger already exists for this student.");
       return existingLedger;
     }
 
-    // Create New Ledger According to Schema
+    // 2️⃣ Prepare Recommended Fees (only if benefit enabled)
+    let finalRecommendedFees = [];
+
+    if (
+      student.feeBenefit?.hasFeeBenefit === true &&
+      Array.isArray(recommendedFees) &&
+      recommendedFees.length > 0
+    ) {
+      finalRecommendedFees = recommendedFees;
+    }
+
+    // 3️⃣ Create Ledger
     const newLedger = await FeeLedger.create({
       studentId: student._id,
-      session: student.session, // example: "2024-2025"
-      className: student.className, // example: "5"
+      session: student.session,
+      className: student.className,
       section: student.section || "",
 
-      // Admission Fee
       admissionFee: {
         amount: 0,
         status: "Unpaid",
@@ -25,7 +38,6 @@ export const createAutoLedger = async (student) => {
         dueAmount: 0,
       },
 
-      // Annual Fee
       annualFee: {
         amount: 0,
         status: "Unpaid",
@@ -33,19 +45,15 @@ export const createAutoLedger = async (student) => {
         dueAmount: 0,
       },
 
-      // Monthly Fee Empty Initially
       monthlyRecords: [],
-
-      // Extra Fees Empty Initially
       extraFees: [],
 
-      // Summary
-      totalDue: 0,
-      totalPaid: 0,
+      // ⭐ Recommended Fees (ONLY REFERENCE)
+      recommendedFees: finalRecommendedFees,
+
       lastPaymentDate: null,
     });
 
-    console.log("Auto Ledger Created Successfully!");
     return newLedger;
   } catch (error) {
     console.error("Auto Ledger Create Error:", error);
@@ -296,6 +304,139 @@ export const getLedgerByStudentId = async (req, res) => {
       success: false,
       message: "Server Error",
       error: error.message,
+    });
+  }
+};
+
+//ADD RECOMMENDED FEE FOR INDIVUAL STUDENT
+export const createRecommendedFeeForIndivualStudent = async (req, res) => {
+  try {
+    const { studentId, recommendedFees, description } = req.body;
+
+    if (!studentId || !recommendedFees || recommendedFees.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "studentId and recommendedFees are required",
+      });
+    }
+
+    // 🔹 1. Update Student feeBenefit
+    const student = await Student.findByIdAndUpdate(
+      studentId,
+      {
+        $set: {
+          "feeBenefit.hasFeeBenefit": true,
+          "feeBenefit.description": description || "Recommended fee approved",
+          "feeBenefit.approvedAt": new Date(),
+        },
+      },
+      { new: true }
+    );
+
+    if (!student) {
+      return res.status(404).json({
+        success: false,
+        message: "Student not found",
+      });
+    }
+
+    // 🔹 2. Update Recommended Fees in FeeLedger
+    const ledger = await FeeLedger.findOneAndUpdate(
+      { studentId },
+      {
+        $set: {
+          recommendedFees: recommendedFees,
+        },
+      },
+      { new: true }
+    );
+
+    if (!ledger) {
+      return res.status(404).json({
+        success: false,
+        message: "Fee ledger not found for this student",
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Recommended fee created successfully",
+      student,
+      recommendedFees: ledger.recommendedFees,
+    });
+  } catch (error) {
+    console.error("Create Recommended Fee Error:", error);
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+
+export const deleteOneRecommendedFee = async (req, res) => {
+  try {
+    const { studentId, recommendedFeeId } = req.params;
+
+    if (!studentId || !recommendedFeeId) {
+      return res.status(400).json({
+        success: false,
+        message: "studentId and recommendedFeeId are required",
+      });
+    }
+
+    // 🔹 Find ledger
+    const ledger = await FeeLedger.findOne({ studentId });
+
+    if (!ledger) {
+      return res.status(404).json({
+        success: false,
+        message: "Fee ledger not found",
+      });
+    }
+
+    // 🔹 Check if recommended fee exists
+    const feeExists = ledger.recommendedFees.some(
+      (fee) => fee._id.toString() === recommendedFeeId
+    );
+
+    if (!feeExists) {
+      return res.status(404).json({
+        success: false,
+        message: "Recommended fee not found",
+      });
+    }
+
+    // 🔹 Remove one recommended fee
+    ledger.recommendedFees = ledger.recommendedFees.filter(
+      (fee) => fee._id.toString() !== recommendedFeeId
+    );
+
+    await ledger.save();
+
+    // 🔹 If no recommended fee left → disable feeBenefit
+    if (ledger.recommendedFees.length === 0) {
+      await Student.findByIdAndUpdate(studentId, {
+        $set: {
+          "feeBenefit.hasFeeBenefit": false,
+        },
+        $unset: {
+          "feeBenefit.description": "",
+          "feeBenefit.approvedAt": "",
+        },
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Recommended fee deleted successfully",
+      recommendedFees: ledger.recommendedFees,
+    });
+  } catch (error) {
+    console.error("Delete Recommended Fee Error:", error);
+    res.status(500).json({
+      success: false,
+      message: error.message,
     });
   }
 };

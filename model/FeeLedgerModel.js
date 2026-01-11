@@ -24,6 +24,18 @@ const ExtraFeeSchema = new mongoose.Schema({
   },
 });
 
+const RecommendedFeeSchema = new mongoose.Schema({
+  feeType: {
+    type: String, //tution fee
+    required: true,
+  },
+
+  amount: {
+    type: Number, //500
+    required: true,
+  },
+});
+
 const FeeLedgerSchema = new mongoose.Schema(
   {
     studentId: {
@@ -65,7 +77,12 @@ const FeeLedgerSchema = new mongoose.Schema(
     // 🧩 Exam Fee, Uniform, Books etc
     extraFees: { type: [ExtraFeeSchema], default: [] },
 
-    // 📊 Final Summary 
+    recommendedFees: {
+      type: [RecommendedFeeSchema],
+      default: [],
+    },
+
+    // 📊 Final Summary
     paymentHistory: [
       {
         paidAmount: { type: Number, default: 0 },

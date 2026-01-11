@@ -1,4 +1,5 @@
 import Student from "../model/studentModel.js";
+import FeeLedgerModel from "../model/FeeLedgerModel.js";
 import { createAutoLedger } from "./FeeLedgerController.js";
 import ExcelJS from "exceljs";
 import cloudinary from "../config/cloudinary.js";
@@ -6,72 +7,90 @@ import cloudinary from "../config/cloudinary.js";
 // CREATE STUDENT WITH PHOTOS
 export const createStudent = async (req, res) => {
   try {
+    // 🔴 Parse multipart JSON
+    if (req.body.feeBenefit) {
+      req.body.feeBenefit = JSON.parse(req.body.feeBenefit);
+    }
+
+    if (req.body.recommendedFees) {
+      req.body.recommendedFees = JSON.parse(req.body.recommendedFees);
+    }
+
     const body = req.body;
 
-    // 1️⃣ Create student first (without photos)
+    // 1️⃣ Serial No
+    const lastStudent = await Student.findOne()
+      .sort({ serialNo: -1 })
+      .select("serialNo");
+
+    body.serialNo =
+      body.serialNo || (lastStudent ? lastStudent.serialNo + 1 : 1);
+
+    // 2️⃣ Create Student
     let student = await Student.create(body);
 
-    // 2️⃣ Upload photos if present
-    if (req.files) {
-      // 👦 Student Photo
-      if (req.files.photo) {
-        const upload = await cloudinary.uploader.upload(
-          req.files.photo[0].path,
-          {
-            folder: "students/photo",
-            public_id: `student_${student.serialNo}`,
-            overwrite: true,
-          }
-        );
-        student.photo = upload.secure_url;
-      }
-
-      // 👨 Father Photo
-      if (req.files.fatherPhoto) {
-        const upload = await cloudinary.uploader.upload(
-          req.files.fatherPhoto[0].path,
-          {
-            folder: "students/father",
-            public_id: `father_${student.serialNo}`,
-            overwrite: true,
-          }
-        );
-        student.fatherPhoto = upload.secure_url;
-      }
-
-      // 👩 Mother Photo
-      if (req.files.motherPhoto) {
-        const upload = await cloudinary.uploader.upload(
-          req.files.motherPhoto[0].path,
-          {
-            folder: "students/mother",
-            public_id: `mother_${student.serialNo}`,
-            overwrite: true,
-          }
-        );
-        student.motherPhoto = upload.secure_url;
-      }
-
+    // ✅ Fee Benefit (NOW WORKING)
+    if (body.feeBenefit?.hasFeeBenefit === true) {
+      student.feeBenefit = {
+        hasFeeBenefit: true,
+        description: body.feeBenefit.description || "",
+        approvedAt: new Date(),
+      };
       await student.save();
     }
 
-    // 3️⃣ Auto Ledger create
-    await createAutoLedger(student);
+    // 3️⃣ Upload Photos
+    if (req.files?.photo) {
+      const upload = await cloudinary.uploader.upload(req.files.photo[0].path, {
+        folder: "students/photo",
+        public_id: `student_${student.serialNo}`,
+        overwrite: true,
+      });
+      student.photo = upload.secure_url;
+    }
+
+    if (req.files?.fatherPhoto) {
+      const upload = await cloudinary.uploader.upload(
+        req.files.fatherPhoto[0].path,
+        {
+          folder: "students/father",
+          public_id: `father_${student.serialNo}`,
+          overwrite: true,
+        }
+      );
+      student.fatherPhoto = upload.secure_url;
+    }
+
+    if (req.files?.motherPhoto) {
+      const upload = await cloudinary.uploader.upload(
+        req.files.motherPhoto[0].path,
+        {
+          folder: "students/mother",
+          public_id: `mother_${student.serialNo}`,
+          overwrite: true,
+        }
+      );
+      student.motherPhoto = upload.secure_url;
+    }
+
+    await student.save();
+
+    // 4️⃣ Auto Ledger (NOW recommendedFees WORKING)
+    await createAutoLedger(student, body.recommendedFees || []);
 
     res.status(201).json({
       success: true,
-      message: "Student created with photos + Ledger initialized",
+      message: "Student created successfully",
       data: student,
     });
   } catch (error) {
-    console.error(error.message);
+    console.error(error);
     res.status(500).json({
       success: false,
       message: error.message,
     });
   }
 };
-
 
 // BULK STUDENT APPLY
 export const bulkStudentApplyController = async (req, res) => {
@@ -123,13 +142,17 @@ export const bulkStudentApplyController = async (req, res) => {
       });
     }
 
-    // 🔹 Fetch existing Aadhar & Serial
-    const existingStudents = await Student.find({}, "aadharNo serialNo").lean();
+    // 🔹 Fetch existing Aadhar, Serial & PEN
+    const existingStudents = await Student.find(
+      {},
+      "aadharNo serialNo penNo"
+    ).lean();
 
     const existingAadhars = new Set(
-      existingStudents.map((s) => s.aadharNo?.trim())
+      existingStudents.map((s) => s.aadharNo).filter(Boolean)
     );
     const existingSerials = new Set(existingStudents.map((s) => s.serialNo));
+    const existingPens = new Set(existingStudents.map((s) => s.penNo));
 
     let successCount = 0;
     let skipCount = 0;
@@ -149,14 +172,15 @@ export const bulkStudentApplyController = async (req, res) => {
           continue;
         }
 
-        if (!row.aadharno) {
-          errors.push(`Row ${i + 2}: Aadhar No missing`);
+        if (!row.penno) {
+          errors.push(`Row ${i + 2}: PEN No missing`);
           skipCount++;
           continue;
         }
 
         const serialNo = Number(row.serialno);
-        const aadharNo = String(row.aadharno).trim();
+        const penNo = String(row.penno).trim();
+        const aadharNo = row.aadharno ? String(row.aadharno).trim() : null;
 
         if (existingSerials.has(serialNo)) {
           errors.push(`Row ${i + 2}: Serial No already exists (${serialNo})`);
@@ -164,7 +188,13 @@ export const bulkStudentApplyController = async (req, res) => {
           continue;
         }
 
-        if (existingAadhars.has(aadharNo)) {
+        if (existingPens.has(penNo)) {
+          errors.push(`Row ${i + 2}: PEN No already exists (${penNo})`);
+          skipCount++;
+          continue;
+        }
+
+        if (aadharNo && existingAadhars.has(aadharNo)) {
           errors.push(`Row ${i + 2}: Aadhar already exists (${aadharNo})`);
           skipCount++;
           continue;
@@ -172,33 +202,32 @@ export const bulkStudentApplyController = async (req, res) => {
 
         const studentData = {
           serialNo,
+          penNo,
 
           studentName: row.studentname || "",
           fatherName: row.fathername || "",
-          motherName: row.mothername || "",
+          motherName: row.mothername || null,
 
           dob: row.dob || "",
           gender: row.gender || "",
 
-          aadharNo,
-          mobile: row.mobile || "",
+          aadharNo: aadharNo || null,
+          mobile: row.mobile || null,
 
           photo: row.photo || null,
 
           session: row.session || "",
           className: row.class || row.classname || "",
-          section: row.section || "",
-          rollNo: row.rollno || row.regno || "",
+          section: row.section || null,
+          rollNo: row.rollno || row.regno || null,
 
-          admissionDate: row.admissiondate || "",
+          address1: row.address1 || null,
+          address2: row.address2 || null,
+          city: row.city || null,
 
-          address1: row.address1 || "",
-          address2: row.address2 || "",
-          city: row.city || "",
-
-          religion: row.religion || "",
-          category: row.category || "",
-          bloodGroup: row.bloodgroup || "",
+          religion: row.religion || null,
+          category: row.category || null,
+          bloodGroup: row.bloodgroup || null,
 
           transport: row.transport || "N/A",
           vehicle: row.vehicle || "N/A",
@@ -210,15 +239,16 @@ export const bulkStudentApplyController = async (req, res) => {
           dobCert: row.dobcert || "No",
         };
 
+        // 🔴 REQUIRED FIELDS
         const requiredFields = [
           "serialNo",
+          "penNo",
           "studentName",
           "fatherName",
           "dob",
           "gender",
           "session",
           "className",
-          "aadharNo",
         ];
 
         const missing = requiredFields.filter((field) => !studentData[field]);
@@ -230,8 +260,11 @@ export const bulkStudentApplyController = async (req, res) => {
         }
 
         studentsToInsert.push(studentData);
+
         existingSerials.add(serialNo);
-        existingAadhars.add(aadharNo);
+        existingPens.add(penNo);
+        if (aadharNo) existingAadhars.add(aadharNo);
+
         successCount++;
       } catch (err) {
         errors.push(`Row ${i + 2}: ${err.message}`);
@@ -333,10 +366,10 @@ export const getAllStudents = async (req, res) => {
   }
 };
 
-// 🔍 Get Single Student
+// 🔍 Get Single Student (with Recommended Fee if applicable)
 export const getSingleStudent = async (req, res) => {
   try {
-    const student = await Student.findById(req.params.id).populate("ledgerId");
+    const student = await Student.findById(req.params.id);
 
     if (!student) {
       return res.status(404).json({
@@ -345,13 +378,30 @@ export const getSingleStudent = async (req, res) => {
       });
     }
 
+    let recommendedFees = [];
+
+    // ✅ If student has fee benefit → fetch recommended fees
+    if (student?.feeBenefit?.hasFeeBenefit === true) {
+      const ledger = await FeeLedgerModel.findOne({
+        studentId: student._id,
+      }).select("recommendedFees");
+
+      if (ledger?.recommendedFees?.length > 0) {
+        recommendedFees = ledger.recommendedFees;
+      }
+    }
+
     res.status(200).json({
       success: true,
       message: "Student found",
       student,
+      recommendedFees, // 👈 frontend ko direct mil jayega
     });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
   }
 };
 

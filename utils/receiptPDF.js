@@ -2,91 +2,122 @@ import PDFDocument from "pdfkit";
 import fs from "fs";
 import path from "path";
 
+
 export const generateReceiptPDF = async (receipt) => {
   return new Promise((resolve, reject) => {
     try {
       const fileName = `${receipt.receiptNo}.pdf`;
       const pdfPath = path.join("uploads", "receipts", fileName);
 
-      const doc = new PDFDocument({ margin: 50 });
-
-      // Save file
+      const doc = new PDFDocument({ size: "A4", margin: 50 });
       const stream = fs.createWriteStream(pdfPath);
       doc.pipe(stream);
 
-      // HEADER
+      /* ================= HEADER ================= */
       doc
         .fontSize(18)
-        .text("ABC Public School", { align: "center" })
-        .moveDown(0.5);
+        .text("ABC PUBLIC SCHOOL", { align: "center" })
+        .fontSize(10)
+        .text("Address Line 1, City, State - PIN", { align: "center" })
+        .moveDown(0.8);
 
+      doc.moveTo(50, doc.y).lineTo(545, doc.y).stroke();
+      doc.moveDown(1);
+
+      /* ================= RECEIPT INFO ================= */
       doc
-        .fontSize(12)
-        .text(`Receipt No: ${receipt.receiptNo}`)
-        .text(`Date: ${new Date().toLocaleDateString()}`)
-        .moveDown();
+        .fontSize(11)
+        .text(`Receipt No : ${receipt.receiptNo}`, 50, doc.y, { continued: true })
+        .text(
+          `Date : ${new Date().toLocaleDateString()}`,
+          { align: "right" }
+        )
+        .moveDown(1);
 
-      // Student Info
+      /* ================= STUDENT INFO ================= */
       doc
-        .fontSize(13)
-        .text(`Student: ${receipt.studentName}`)
-        .text(`Class: ${receipt.className}  Section: ${receipt.section}`)
-        .moveDown();
+        .fontSize(11)
+        .text(`Student Name : ${receipt.studentName}`)
+        .text(`Class / Section : ${receipt.className} - ${receipt.section}`)
+        .text(`Month : ${receipt.month} ${receipt.year}`)
+        .moveDown(1);
 
-      // Fee Breakdown
-      doc.fontSize(14).text("Fee Breakdown:", { underline: true }).moveDown(0.5);
+      doc.moveTo(50, doc.y).lineTo(545, doc.y).stroke();
+      doc.moveDown(0.8);
 
-      const feeList = [
-        { label: "Tuition Fee", value: receipt.tuitionFee },
-        { label: "Admission Fee", value: receipt.admissionFee },
-        { label: "Annual Fee", value: receipt.annualFee },
-        { label: "Exam Fee", value: receipt.examFee },
-        { label: "Transport Fee", value: receipt.transportFee },
-      ];
+      /* ================= TABLE HEADER ================= */
+      let y = doc.y;
+      doc.fontSize(11).text("SL", 50, y);
+      doc.text("DESCRIPTION", 100, y);
+      doc.text("AMOUNT (₹)", 450, y, { align: "right" });
 
-      feeList.forEach((f) => {
-        if (f.value > 0) {
-          doc.fontSize(12).text(`${f.label}: ₹${f.value}`);
+      y += 15;
+      doc.moveTo(50, y).lineTo(545, y).stroke();
+
+      /* ================= TABLE BODY ================= */
+      let sl = 1;
+      y += 8;
+
+      const addRow = (label, value) => {
+        if (value > 0) {
+          doc.fontSize(11).text(sl++, 50, y);
+          doc.text(label, 100, y);
+          doc.text(value.toFixed(2), 450, y, { align: "right" });
+          y += 18;
         }
+      };
+
+      addRow("Tuition Fee", receipt.tuitionFee);
+      addRow("Admission Fee", receipt.admissionFee);
+      addRow("Annual Fee", receipt.annualFee);
+      addRow("Exam Fee", receipt.examFee);
+      addRow("Transport Fee", receipt.transportFee);
+
+      receipt.extraFees?.forEach((f) => {
+        addRow(f.title, f.amount);
       });
 
-      // Extra Fees
-      receipt.extraFees?.forEach((e) => {
-        doc.text(`${e.title}: ₹${e.amount}`);
-      });
+      y += 5;
+      doc.moveTo(50, y).lineTo(545, y).stroke();
+      y += 12;
 
-      doc.moveDown();
+      /* ================= TOTALS ================= */
+      const rightText = (label, value) => {
+        doc.text(label, 300, y);
+        doc.text(value.toFixed(2), 450, y, { align: "right" });
+        y += 16;
+      };
 
+      rightText("Sub Total", receipt.totalAmount);
+      rightText("Discount", -receipt.discount);
+      rightText("Scholarship", -receipt.scholarship);
+
+      y += 5;
+      doc.moveTo(300, y).lineTo(545, y).stroke();
+      y += 12;
+
+      rightText("Paid Amount", receipt.paidAmount);
+      rightText("Due Amount", receipt.dueAmount);
+
+      y += 20;
+
+      /* ================= FOOTER ================= */
       doc
-        .fontSize(13)
-        .text(`Discount: ₹${receipt.discount}`)
-        .text(`Scholarship: ₹${receipt.scholarship}`)
-        .moveDown();
+        .fontSize(11)
+        .text(`Payment Mode : ${receipt.paymentMode}`, 50, y)
+        .moveDown(2);
 
-      // Total
-      doc
-        .fontSize(14)
-        .text(`Total Amount: ₹${receipt.totalAmount}`)
-        .text(`Paid Amount: ₹${receipt.paidAmount}`)
-        .text(`Due Amount: ₹${receipt.dueAmount}`)
-        .moveDown();
-
-      doc.text(`Payment Mode: ${receipt.paymentMode}`).moveDown(2);
-
-      // Footer
-      doc
-        .fontSize(12)
-        .text("Thank you!", { align: "center" });
+      doc.text("Prepared By : Admin", 50, doc.y);
+      doc.text("Authorised Signatory", 400, doc.y + 40);
 
       doc.end();
 
-      // Return URL when saved
       stream.on("finish", () => {
         resolve(`/uploads/receipts/${fileName}`);
       });
-
     } catch (err) {
       reject(err);
     }
   });
 };
+

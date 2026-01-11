@@ -84,7 +84,7 @@ export const receiptCollectFee = async (req, res) => {
 };
 
 
-//DOWNLOAD RECEIPT 
+// DOWNLOAD RECEIPT & AUTO DELETE
 export const downloadReceipt = async (req, res) => {
   try {
     const { fileName } = req.params;
@@ -99,8 +99,22 @@ export const downloadReceipt = async (req, res) => {
       });
     }
 
-    // Force download (browser will download instead of preview)
-    return res.download(filePath, fileName);
+    // Download + delete after send
+    res.download(filePath, fileName, (err) => {
+      if (err) {
+        console.error("Download error:", err);
+        return;
+      }
+
+      // 🧹 Delete file after successful download
+      fs.unlink(filePath, (unlinkErr) => {
+        if (unlinkErr) {
+          console.error("File delete error:", unlinkErr);
+        } else {
+          console.log(`Temporary receipt deleted: ${fileName}`);
+        }
+      });
+    });
   } catch (error) {
     console.error("Download Error:", error);
     res.status(500).json({
@@ -109,3 +123,4 @@ export const downloadReceipt = async (req, res) => {
     });
   }
 };
+

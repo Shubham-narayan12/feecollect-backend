@@ -16,9 +16,9 @@ const FeeStructureSchema = new mongoose.Schema(
 
     admissionFee: { type: Number, required: true },
     tuitionFee: { type: Number, required: true },
-    annuFalFee: { type: Number, required: true },
-    examee: { type: Number, required: true },
-    transportFee: { type: Number, default: 0 }, // Some classes don't use transport
+    annualFee: { type: Number, required: true },
+    examFee: { type: Number, required: true },
+    transportFee: { type: Number, default: 0 }, //Some classes don't use transport
 
     extraFees: {
       type: [ExtraFeeSchema], // multiple optional fees

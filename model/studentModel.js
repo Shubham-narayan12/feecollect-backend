@@ -18,7 +18,8 @@ const studentSchema = new mongoose.Schema(
       required: true,
     },
 
-    aadharNo: { type: String, required: true, unique: true },
+    aadharNo: { type: String, unique: true },
+    penNo: { type: String, required: true, unique: true },
     mobile: { type: String },
     fatherPhoto: {
       type: String,
@@ -35,8 +36,6 @@ const studentSchema = new mongoose.Schema(
     className: { type: String, required: true }, // class
     section: { type: String },
     rollNo: { type: String }, // regNo
-
-    admissionDate: { type: String },
 
     // 🏠 Address
     address1: { type: String },
@@ -78,6 +77,21 @@ const studentSchema = new mongoose.Schema(
       type: String,
       enum: ["Yes", "No"],
       default: "No",
+    },
+
+    // Benefit Remark
+    feeBenefit: {
+      hasFeeBenefit: {
+        type: Boolean,
+        default: false,
+      },
+      description: {
+        type: String,
+      },
+
+      approvedAt: {
+        type: Date,
+      },
     },
 
     // 🖼️ Student Photo

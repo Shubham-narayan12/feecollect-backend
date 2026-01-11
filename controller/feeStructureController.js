@@ -50,7 +50,7 @@ export const createFeeStructure = async (req, res) => {
 //GET FEE STRUCTURE BY CLASS
 export const getFeeStructureByClass = async (req, res) => {
   try {
-    const { className } = req.params;
+    const { className } = req.body;
 
     const structure = await FeeStructure.findOne({ className });
 
@@ -63,7 +63,7 @@ export const getFeeStructureByClass = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      data: structure,
+      structure,
     });
   } catch (error) {
     console.error(error);

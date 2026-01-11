@@ -4,6 +4,7 @@ import { uploadParentPhotoZip } from "../controller/parentPhotoController.js";
 import {
   downloadIDCardPDF,
   generateBulkIDCards,
+  generateBulkIDCardsByClassSection,
 } from "../controller/idCardController.js";
 
 const router = express.Router();
@@ -18,6 +19,9 @@ router.post(
 
 //GENERATE BULK ID CARD
 router.post("/generate/bulk", generateBulkIDCards);
+
+//GENERATE BULK CLASSWISE IDCARD
+router.post("/generate/classwise",generateBulkIDCardsByClassSection)
 
 //Download ID card PDF
 router.get("/download/:fileName", downloadIDCardPDF);
