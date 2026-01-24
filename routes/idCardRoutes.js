@@ -8,7 +8,10 @@ import {
 } from "../controller/idCardController.js";
 
 const router = express.Router();
-const upload = multer({ dest: "uploads/" });
+
+// Use /tmp for Vercel serverless environment
+const uploadDir = process.env.VERCEL ? "/tmp" : "uploads/";
+const upload = multer({ dest: uploadDir });
 
 //UPLOAD PARENTS PHOTOS
 router.post(

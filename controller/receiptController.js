@@ -110,7 +110,10 @@ export const downloadReceipt = async (req, res) => {
   try {
     const { fileName } = req.params;
 
-    const filePath = path.join("uploads", "receipts", fileName);
+    // Use /tmp for Vercel serverless environment
+    const filePath = process.env.VERCEL 
+      ? path.join("/tmp", "receipts", fileName)
+      : path.join("uploads", "receipts", fileName);
 
     // Check if file exists
     if (!fs.existsSync(filePath)) {

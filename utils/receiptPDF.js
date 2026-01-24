@@ -6,7 +6,15 @@ export const generateReceiptPDF = async (receipt) => {
   return new Promise((resolve, reject) => {
     try {
       const fileName = `${receipt.receiptNo}.pdf`;
-      const pdfPath = path.join("uploads", "receipts", fileName);
+      // Use /tmp for Vercel serverless environment
+      const receiptsDir = process.env.VERCEL ? "/tmp/receipts" : path.join("uploads", "receipts");
+      
+      // Ensure directory exists
+      if (!fs.existsSync(receiptsDir)) {
+        fs.mkdirSync(receiptsDir, { recursive: true });
+      }
+      
+      const pdfPath = path.join(receiptsDir, fileName);
 
       const doc = new PDFDocument({ size: "A4", margin: 50 });
       const stream = fs.createWriteStream(pdfPath);

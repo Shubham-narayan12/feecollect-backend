@@ -71,7 +71,12 @@ app.get("/", (req, res) => {
   res.send("Hello from Fee Collect server!");
 });
 
-// Start server
-app.listen(port, () => {
-  console.log(`🚀 Server running on port ${port}`);
-});
+// Start server (only if not in Vercel serverless environment)
+if (!process.env.VERCEL) {
+  app.listen(port, () => {
+    console.log(`🚀 Server running on port ${port}`);
+  });
+}
+
+// Export for Vercel serverless
+export default app;

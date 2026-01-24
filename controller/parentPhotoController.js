@@ -13,7 +13,8 @@ export const uploadParentPhotoZip = async (req, res) => {
     }
 
     const zipPath = req.file.path;
-    const extractPath = `uploads/${batch}`;
+    // Use /tmp for Vercel serverless environment
+    const extractPath = process.env.VERCEL ? `/tmp/${batch}` : `uploads/${batch}`;
 
     fs.mkdirSync(extractPath, { recursive: true });
 
