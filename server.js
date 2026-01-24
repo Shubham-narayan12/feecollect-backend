@@ -66,7 +66,6 @@ app.use("/api/v1/idcard", idCardRoutes);
 app.use("/api/v1/admin", adminRoutes);
 app.use("/api/v1/enquiry", enquiryRoutes);
 
-// Test Route
 app.get("/", (req, res) => {
   res.send("Hello from Fee Collect server!");
 });
