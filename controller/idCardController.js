@@ -18,8 +18,13 @@ export const generateBulkIDCards = async (req, res) => {
     }
 
     // ✅ STEP 1: Ensure folder exists
-    const outputDir = path.join("public", "idcards");
-    fs.mkdirSync(outputDir, { recursive: true });
+    const outputDir = process.env.VERCEL 
+      ? path.join("/tmp", "idcards") 
+      : path.join("public", "idcards");
+    
+    if (!fs.existsSync(outputDir)) {
+      fs.mkdirSync(outputDir, { recursive: true });
+    }
 
     // ✅ STEP 2: PDF file name & path
     const fileName = `idcards-${startSerial}-${endSerial}.pdf`;
@@ -244,8 +249,13 @@ export const generateBulkIDCardsByClassSection = async (req, res) => {
     }
 
     // ✅ STEP 1: Ensure folder exists
-    const outputDir = path.join("public", "idcards");
-    fs.mkdirSync(outputDir, { recursive: true });
+    const outputDir = process.env.VERCEL 
+      ? path.join("/tmp", "idcards") 
+      : path.join("public", "idcards");
+    
+    if (!fs.existsSync(outputDir)) {
+      fs.mkdirSync(outputDir, { recursive: true });
+    }
 
     // ✅ STEP 2: File name
     const safeSection = section ? section : "ALL";

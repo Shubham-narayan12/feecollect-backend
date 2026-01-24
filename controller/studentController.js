@@ -3,6 +3,7 @@ import FeeLedgerModel from "../model/FeeLedgerModel.js";
 import { createAutoLedger } from "./FeeLedgerController.js";
 import ExcelJS from "exceljs";
 import cloudinary from "../config/cloudinary.js";
+import { cleanupRequestFiles } from "../utils/fileCleanup.js";
 
 // CREATE STUDENT WITH PHOTOS
 export const createStudent = async (req, res) => {
@@ -78,6 +79,9 @@ export const createStudent = async (req, res) => {
     // 4️⃣ Auto Ledger (NOW recommendedFees WORKING)
     await createAutoLedger(student, body.recommendedFees || []);
 
+    // 5️⃣ Cleanup temporary files (important for Vercel /tmp cleanup)
+    cleanupRequestFiles(req);
+
     res.status(201).json({
       success: true,
       message: "Student created successfully",
@@ -85,6 +89,10 @@ export const createStudent = async (req, res) => {
     });
   } catch (error) {
     console.error(error);
+    
+    // Cleanup files even on error
+    cleanupRequestFiles(req);
+    
     res.status(500).json({
       success: false,
       message: error.message,
