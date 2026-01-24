@@ -1,7 +1,10 @@
 import mongoose from "mongoose";
 
 const ReceiptSchema = new mongoose.Schema({
-  receiptNo: { type: String, required: true }, // RCPT-2025-00001
+  receiptNo: {
+    type: String,
+    required: true, // RCPT-2026-00001
+  },
 
   studentId: {
     type: mongoose.Schema.Types.ObjectId,
@@ -10,29 +13,26 @@ const ReceiptSchema = new mongoose.Schema({
   },
 
   studentName: { type: String, required: true },
+  fatherName: { type: String, required: true },
   className: { type: String, required: true },
   section: { type: String },
+  rollNo: { type: String },
 
-  // fee breakup
+  // Fee breakup
   tuitionFee: { type: Number, default: 0 },
   admissionFee: { type: Number, default: 0 },
   annualFee: { type: Number, default: 0 },
-  examFee: { type: Number, default: 0 },
   transportFee: { type: Number, default: 0 },
 
-  // Extra / custom fees from admin
+  // Extra/custom fees
   extraFees: [
     {
-      title: String,
-      amount: Number,
+      title: { type: String },
+      amount: { type: Number },
     },
   ],
 
-  // Discount / scholarship
-  discount: { type: Number, default: 0 },
-  scholarship: { type: Number, default: 0 },
-
-  // Final amount
+  // Final calculation
   totalAmount: { type: Number, required: true },
   paidAmount: { type: Number, required: true },
   dueAmount: { type: Number, default: 0 },
@@ -43,13 +43,27 @@ const ReceiptSchema = new mongoose.Schema({
     required: true,
   },
 
-  month: { type: String, required: true }, // April
-  year: { type: Number, required: true }, // 2025
+  // Multiple months support
+  months: [
+    {
+      type: String, // January-2026
+    },
+  ],
 
-  // For PDF download (set after generation)
-  pdfUrl: { type: String },
+  year: {
+    type: Number,
+    required: true,
+  },
 
-  createdAt: { type: Date, default: Date.now },
+  // PDF file
+  fileName: {
+    type: String, // receipt_RCPT-2026-00001.pdf
+  },
+
+  createdAt: {
+    type: Date,
+    default: Date.now,
+  },
 });
 
 export default mongoose.model("Receipt", ReceiptSchema);

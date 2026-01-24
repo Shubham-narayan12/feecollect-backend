@@ -2,7 +2,6 @@ import PDFDocument from "pdfkit";
 import fs from "fs";
 import path from "path";
 
-
 export const generateReceiptPDF = async (receipt) => {
   return new Promise((resolve, reject) => {
     try {
@@ -16,9 +15,9 @@ export const generateReceiptPDF = async (receipt) => {
       /* ================= HEADER ================= */
       doc
         .fontSize(18)
-        .text("ABC PUBLIC SCHOOL", { align: "center" })
+        .text("THAWE CENTRAL SCHOOL", { align: "center" })
         .fontSize(10)
-        .text("Address Line 1, City, State - PIN", { align: "center" })
+        .text("BEDUTOLA, POST OFFICE-THAWE, GOPALGANJ PIN-841440", { align: "center" })
         .moveDown(0.8);
 
       doc.moveTo(50, doc.y).lineTo(545, doc.y).stroke();
@@ -28,18 +27,18 @@ export const generateReceiptPDF = async (receipt) => {
       doc
         .fontSize(11)
         .text(`Receipt No : ${receipt.receiptNo}`, 50, doc.y, { continued: true })
-        .text(
-          `Date : ${new Date().toLocaleDateString()}`,
-          { align: "right" }
-        )
+        .text(`Date : ${new Date().toLocaleDateString()}`, { align: "right" })
         .moveDown(1);
 
       /* ================= STUDENT INFO ================= */
       doc
         .fontSize(11)
         .text(`Student Name : ${receipt.studentName}`)
-        .text(`Class / Section : ${receipt.className} - ${receipt.section}`)
-        .text(`Month : ${receipt.month} ${receipt.year}`)
+        .text(`Father Name  : ${receipt.fatherName}`)
+        .text(
+          `Class / Section : ${receipt.className} - ${receipt.section}`
+        )
+        .text(`Roll No : ${receipt.rollNo}`)
         .moveDown(1);
 
       doc.moveTo(50, doc.y).lineTo(545, doc.y).stroke();
@@ -58,6 +57,11 @@ export const generateReceiptPDF = async (receipt) => {
       let sl = 1;
       y += 8;
 
+      const monthsText =
+        receipt.months && receipt.months.length
+          ? ` (${receipt.months.join(", ")})`
+          : "";
+
       const addRow = (label, value) => {
         if (value > 0) {
           doc.fontSize(11).text(sl++, 50, y);
@@ -67,12 +71,15 @@ export const generateReceiptPDF = async (receipt) => {
         }
       };
 
-      addRow("Tuition Fee", receipt.tuitionFee);
+      // Tuition + Transport with months
+      addRow(`Tuition Fee${monthsText}`, receipt.tuitionFee);
+      addRow(`Transport Fee${monthsText}`, receipt.transportFee);
+
+      // Admission & Annual
       addRow("Admission Fee", receipt.admissionFee);
       addRow("Annual Fee", receipt.annualFee);
-      addRow("Exam Fee", receipt.examFee);
-      addRow("Transport Fee", receipt.transportFee);
 
+      // Extra Fees (Exam / Books / Uniform etc.)
       receipt.extraFees?.forEach((f) => {
         addRow(f.title, f.amount);
       });
@@ -88,9 +95,7 @@ export const generateReceiptPDF = async (receipt) => {
         y += 16;
       };
 
-      rightText("Sub Total", receipt.totalAmount);
-      rightText("Discount", -receipt.discount);
-      rightText("Scholarship", -receipt.scholarship);
+      rightText("Total Amount", receipt.totalAmount);
 
       y += 5;
       doc.moveTo(300, y).lineTo(545, y).stroke();
@@ -113,11 +118,10 @@ export const generateReceiptPDF = async (receipt) => {
       doc.end();
 
       stream.on("finish", () => {
-        resolve(`/uploads/receipts/${fileName}`);
+        resolve(`${fileName}`);
       });
     } catch (err) {
       reject(err);
     }
   });
 };
-

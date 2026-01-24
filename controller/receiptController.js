@@ -1,4 +1,5 @@
 import Receipt from "../model/ReceiptModel.js";
+import Student from "../model/studentModel.js";
 import path from "path";
 import fs from "fs";
 import { generateNextReceiptNo } from "../utils/generateReceiptCounter.js";
@@ -8,81 +9,101 @@ export const receiptCollectFee = async (req, res) => {
   try {
     const {
       studentId,
-      studentName,
-      className,
-      section,
-      tuitionFee,
+      monthlyRecords,
       admissionFee,
       annualFee,
-      examFee,
-      transportFee,
       extraFees,
-      discount,
-      scholarship,
       paidAmount,
       paymentMode,
-      month,
     } = req.body;
 
     const year = new Date().getFullYear();
 
-    // 1. Generate receipt number
+    // 1️⃣ Get Student Details using studentId
+    const student = await Student.findById(studentId);
+    if (!student) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Student not found" });
+    }
+
+    const studentName = student.studentName;
+    const fatherName = student.fatherName;
+    const className = student.className;
+    const section = student.section;
+    const rollNo = student.rollNo;
+
+    // 2️⃣ Generate Receipt Number
     const receiptNo = await generateNextReceiptNo();
 
-    // 2. Calculate totals
+    let tuitionFee = 0;
+    let transportFee = 0;
+    let months = [];
+
+    // 3️⃣ Monthly Records Calculation
+    if (monthlyRecords && Array.isArray(monthlyRecords)) {
+      monthlyRecords.forEach((m) => {
+        tuitionFee += m.tuitionFee || 0;
+        transportFee += m.transportFee || 0;
+        months.push(`${m.month}`);
+      });
+    }
+
+    // 4️⃣ Extra Fees Total
+    const extraFeeTotal = extraFees?.reduce((sum, f) => sum + f.amount, 0) || 0;
+
+    // 5️⃣ Total Amount Calculation
     const totalAmount =
+      (admissionFee || 0) +
+      (annualFee || 0) +
       tuitionFee +
-      admissionFee +
-      annualFee +
-      examFee +
       transportFee +
-      (extraFees?.reduce((sum, f) => sum + f.amount, 0) || 0) -
-      discount -
-      scholarship;
+      extraFeeTotal;
 
-    const dueAmount = totalAmount - paidAmount;
+    const dueAmount = Math.max(totalAmount - paidAmount, 0);
 
-    // 3. Save to DB
+    // 6️⃣ Save Receipt in DB
     const newReceipt = await Receipt.create({
       receiptNo,
       studentId,
       studentName,
+      fatherName,
       className,
       section,
+      rollNo,
+
+      admissionFee: admissionFee || 0,
+      annualFee: annualFee || 0,
       tuitionFee,
-      admissionFee,
-      annualFee,
-      examFee,
       transportFee,
       extraFees,
-      discount,
-      scholarship,
+
       totalAmount,
       paidAmount,
       dueAmount,
+
       paymentMode,
-      month,
+      months,
       year,
     });
 
-    // 4. Generate PDF
-    const pdfUrl = await generateReceiptPDF(newReceipt);
+    // 7️⃣ Generate PDF
+    const fileName = await generateReceiptPDF(newReceipt);
 
-    // 5. Update pdf url in DB
-    newReceipt.pdfUrl = pdfUrl;
+    // 8️⃣ Update PDF URL
+    newReceipt.fileName = fileName;
     await newReceipt.save();
 
-    res.json({
+    return res.status(200).json({
       success: true,
-      message: "Fee collected & PDF generated",
+      message: "Fee collected & receipt generated",
       receipt: newReceipt,
     });
   } catch (error) {
-    console.log(error);
-    res.status(500).json({ success: false, message: "Server error" });
+    console.error("Receipt Collect Error:", error);
+    return res.status(500).json({ success: false, message: error.message });
   }
 };
-
 
 // DOWNLOAD RECEIPT & AUTO DELETE
 export const downloadReceipt = async (req, res) => {
@@ -123,4 +144,3 @@ export const downloadReceipt = async (req, res) => {
     });
   }
 };
-

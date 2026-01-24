@@ -18,7 +18,8 @@ import feeCollectRoutes from "./routes/feeCollectRoutes.js";
 import feeStructureRoutes from "./routes/feeStructureRoutes.js";
 import receiptRoutes from "./routes/receiptRoutes.js";
 import adminRoutes from "./routes/adminRoutes.js";
-import idCardRoutes from "./routes/idCardRoutes.js"
+import idCardRoutes from "./routes/idCardRoutes.js";
+import enquiryRoutes from "./routes/enquiryRoutes.js";
 
 // Connect to database
 connectDb();
@@ -28,7 +29,8 @@ const app = express();
 const port = process.env.PORT || 8000;
 
 const allowedOrigins = [
-  "http://localhost:5173", // local development
+  "http://localhost:5173",
+  "https://demoschool.aadishrisoftech.com/",
 ];
 
 app.use(
@@ -42,7 +44,7 @@ app.use(
       }
     },
     credentials: true, // allow cookies
-  })
+  }),
 );
 
 // Middleware
@@ -62,6 +64,7 @@ app.use("/api/v1/feestructure", feeStructureRoutes);
 app.use("/api/v1/receipt", receiptRoutes);
 app.use("/api/v1/idcard", idCardRoutes);
 app.use("/api/v1/admin", adminRoutes);
+app.use("/api/v1/enquiry", enquiryRoutes);
 
 // Test Route
 app.get("/", (req, res) => {
