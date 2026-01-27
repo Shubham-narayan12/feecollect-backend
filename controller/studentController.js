@@ -57,7 +57,7 @@ export const createStudent = async (req, res) => {
           folder: "students/father",
           public_id: `father_${student.serialNo}`,
           overwrite: true,
-        }
+        },
       );
       student.fatherPhoto = upload.secure_url;
     }
@@ -69,7 +69,7 @@ export const createStudent = async (req, res) => {
           folder: "students/mother",
           public_id: `mother_${student.serialNo}`,
           overwrite: true,
-        }
+        },
       );
       student.motherPhoto = upload.secure_url;
     }
@@ -89,10 +89,10 @@ export const createStudent = async (req, res) => {
     });
   } catch (error) {
     console.error(error);
-    
+
     // Cleanup files even on error
     cleanupRequestFiles(req);
-    
+
     res.status(500).json({
       success: false,
       message: error.message,
@@ -111,7 +111,11 @@ export const bulkStudentApplyController = async (req, res) => {
     }
 
     const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(req.file.buffer);
+    if (req.file.mimetype === "text/csv") {
+      await workbook.csv.load(req.file.buffer);
+    } else {
+      await workbook.xlsx.load(req.file.buffer);
+    }
 
     const worksheet = workbook.worksheets[0];
     if (!worksheet) {
@@ -129,7 +133,7 @@ export const bulkStudentApplyController = async (req, res) => {
         .trim()
         .toLowerCase()
         .replace(/\s+/g, "_")
-        .replace(/[^a-z0-9_]/g, "")
+        .replace(/[^a-z0-9_]/g, ""),
     );
 
     const rows = [];
@@ -153,11 +157,11 @@ export const bulkStudentApplyController = async (req, res) => {
     // 🔹 Fetch existing Aadhar, Serial & PEN
     const existingStudents = await Student.find(
       {},
-      "aadharNo serialNo penNo"
+      "aadharNo serialNo penNo",
     ).lean();
 
     const existingAadhars = new Set(
-      existingStudents.map((s) => s.aadharNo).filter(Boolean)
+      existingStudents.map((s) => s.aadharNo).filter(Boolean),
     );
     const existingSerials = new Set(existingStudents.map((s) => s.serialNo));
     const existingPens = new Set(existingStudents.map((s) => s.penNo));
@@ -212,20 +216,20 @@ export const bulkStudentApplyController = async (req, res) => {
           serialNo,
           penNo,
 
-          studentName: row.studentname || "",
+          studentName: row.studentname?.toString().trim(),
           fatherName: row.fathername || "",
           motherName: row.mothername || null,
 
-          dob: row.dob || "",
-          gender: row.gender || "",
+          dob: row.dob,
+          gender: row.gender,
 
           aadharNo: aadharNo || null,
           mobile: row.mobile || null,
 
           photo: row.photo || null,
 
-          session: row.session || "",
-          className: row.class || row.classname || "",
+          session: row.session,
+          className: row.class || row.classname,
           section: row.section || null,
           rollNo: row.rollno || row.regno || null,
 
@@ -293,7 +297,7 @@ export const bulkStudentApplyController = async (req, res) => {
         if (dbError.writeErrors) {
           insertedStudents = dbError.result?.insertedDocs || [];
           dbError.writeErrors.forEach((e) =>
-            errors.push(`DB Error: ${e.errmsg}`)
+            errors.push(`DB Error: ${e.errmsg}`),
           );
         } else {
           throw dbError;
@@ -309,7 +313,7 @@ export const bulkStudentApplyController = async (req, res) => {
         await createAutoLedger(student);
       } catch (ledgerError) {
         errors.push(
-          `Ledger Error (${student.studentName}): ${ledgerError.message}`
+          `Ledger Error (${student.studentName}): ${ledgerError.message}`,
         );
       }
     }

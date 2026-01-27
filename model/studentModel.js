@@ -7,14 +7,13 @@ const studentSchema = new mongoose.Schema(
       type: Number,
       unique: true,
     },
-    studentName: { type: String, required: true }, // name
-    fatherName: { type: String, required: true },
+    studentName: { type: String,required: true }, // name
+    fatherName: { type: String },
     motherName: { type: String },
 
     dob: { type: String, required: true },
     gender: {
       type: String,
-      enum: ["Boy", "Girl", "Other"],
       required: true,
     },
 
@@ -103,7 +102,7 @@ const studentSchema = new mongoose.Schema(
       ref: "FeeLedger",
     },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 export default mongoose.model("Student", studentSchema);
