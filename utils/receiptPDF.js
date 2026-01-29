@@ -7,13 +7,15 @@ export const generateReceiptPDF = async (receipt) => {
     try {
       const fileName = `${receipt.receiptNo}.pdf`;
       // Use /tmp for Vercel serverless environment
-      const receiptsDir = process.env.VERCEL ? "/tmp/receipts" : path.join("uploads", "receipts");
-      
+      const receiptsDir = process.env.VERCEL
+        ? "/tmp/receipts"
+        : path.join("uploads", "receipts");
+
       // Ensure directory exists
       if (!fs.existsSync(receiptsDir)) {
         fs.mkdirSync(receiptsDir, { recursive: true });
       }
-      
+
       const pdfPath = path.join(receiptsDir, fileName);
 
       const doc = new PDFDocument({ size: "A4", margin: 50 });
@@ -25,7 +27,9 @@ export const generateReceiptPDF = async (receipt) => {
         .fontSize(18)
         .text("THAWE CENTRAL SCHOOL", { align: "center" })
         .fontSize(10)
-        .text("BEDUTOLA, POST OFFICE-THAWE, GOPALGANJ PIN-841440", { align: "center" })
+        .text("BEDUTOLA, POST OFFICE-THAWE, GOPALGANJ PIN-841440", {
+          align: "center",
+        })
         .moveDown(0.8);
 
       doc.moveTo(50, doc.y).lineTo(545, doc.y).stroke();
@@ -34,7 +38,9 @@ export const generateReceiptPDF = async (receipt) => {
       /* ================= RECEIPT INFO ================= */
       doc
         .fontSize(11)
-        .text(`Receipt No : ${receipt.receiptNo}`, 50, doc.y, { continued: true })
+        .text(`Receipt No : ${receipt.receiptNo}`, 50, doc.y, {
+          continued: true,
+        })
         .text(`Date : ${new Date().toLocaleDateString()}`, { align: "right" })
         .moveDown(1);
 
@@ -43,9 +49,7 @@ export const generateReceiptPDF = async (receipt) => {
         .fontSize(11)
         .text(`Student Name : ${receipt.studentName}`)
         .text(`Father Name  : ${receipt.fatherName}`)
-        .text(
-          `Class / Section : ${receipt.className} - ${receipt.section}`
-        )
+        .text(`Class / Section : ${receipt.className} - ${receipt.section}`)
         .text(`Roll No : ${receipt.rollNo}`)
         .moveDown(1);
 

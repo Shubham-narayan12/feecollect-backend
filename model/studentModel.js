@@ -7,7 +7,7 @@ const studentSchema = new mongoose.Schema(
       type: Number,
       unique: true,
     },
-    studentName: { type: String,required: true }, // name
+    studentName: { type: String, required: true }, // name
     fatherName: { type: String },
     motherName: { type: String },
 
@@ -17,7 +17,10 @@ const studentSchema = new mongoose.Schema(
       required: true,
     },
 
-    aadharNo: { type: String, unique: true },
+    aadharNo: {
+      type: String,
+      default: null,
+    },
     penNo: { type: String, required: true, unique: true },
     mobile: { type: String },
     fatherPhoto: {

@@ -2,7 +2,6 @@ import Admin from "../model/adminModel.js";
 import bcrypt from "bcryptjs";
 import JWT from "jsonwebtoken";
 
-
 //CREATE ADMIN
 export const createAdmin = async (req, res) => {
   try {
@@ -37,7 +36,7 @@ export const createAdmin = async (req, res) => {
       admin,
     });
   } catch (error) {
-    console.log(error)
+    console.log(error);
     res.status(500).json({
       success: false,
       message: "Create admin failed",
@@ -51,11 +50,10 @@ export const editAdmin = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const updatedAdmin = await Admin.findByIdAndUpdate(
-      id,
-      req.body,
-      { new: true, runValidators: true }
-    );
+    const updatedAdmin = await Admin.findByIdAndUpdate(id, req.body, {
+      new: true,
+      runValidators: true,
+    });
 
     if (!updatedAdmin) {
       return res.status(404).json({
@@ -78,7 +76,6 @@ export const editAdmin = async (req, res) => {
   }
 };
 
-
 //DELETE ADMIN
 export const deleteAdmin = async (req, res) => {
   try {
@@ -87,7 +84,7 @@ export const deleteAdmin = async (req, res) => {
     const admin = await Admin.findByIdAndUpdate(
       id,
       { isActive: false },
-      { new: true }
+      { new: true },
     );
 
     if (!admin) {
@@ -110,13 +107,15 @@ export const deleteAdmin = async (req, res) => {
   }
 };
 
-
-//LOGIN ADMIN
-export const loginAdmin = async (req, res) => {
+// LOGIN ADMIN (SECURE)
+export const loginAdmin = async (req, res, next) => {
   try {
     const { email, password } = req.body;
 
-    const admin = await Admin.findOne({ email, isActive: true }).select("+password");
+    const admin = await Admin.findOne({
+      email,
+      isActive: true,
+    }).select("+password");
 
     if (!admin) {
       return res.status(401).json({
@@ -133,15 +132,25 @@ export const loginAdmin = async (req, res) => {
       });
     }
 
+    // 🔐 Generate JWT
     const token = admin.generateToken();
 
+    // ⏰ Update last login
     admin.lastLogin = new Date();
     await admin.save();
 
+    // 🍪 Set token in HTTP-only cookie
+    res.cookie("token", token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production", // true in prod
+      sameSite: "strict",
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
+
+    // ✅ Send safe admin data
     res.status(200).json({
       success: true,
       message: "Login successful",
-      token,
       admin: {
         _id: admin._id,
         name: admin.name,
@@ -150,19 +159,21 @@ export const loginAdmin = async (req, res) => {
       },
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: "Login failed",
-      error: error.message,
-    });
+    error.status = 500;
+    next(error); // 🔥 global error handler
   }
 };
 
-
-//LOGOUT ADMIN
+// LOGOUT ADMIN
 export const logoutAdmin = async (req, res) => {
   try {
-    // JWT stateless hota hai → frontend se token delete
+    res.cookie("token", "", {
+      httpOnly: true,
+      expires: new Date(0), // immediately expire
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+    });
+
     res.status(200).json({
       success: true,
       message: "Logout successful",
@@ -174,4 +185,3 @@ export const logoutAdmin = async (req, res) => {
     });
   }
 };
-
