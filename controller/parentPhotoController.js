@@ -13,84 +13,86 @@ export const uploadParentPhotoZip = async (req, res) => {
     }
 
     const zipPath = req.file.path;
-    // Use /tmp for Vercel serverless environment
-    const extractPath = process.env.VERCEL ? `/tmp/${batch}` : `uploads/${batch}`;
+    const extractPath = process.env.VERCEL
+      ? `/tmp/${batch}`
+      : `uploads/${batch}`;
 
+    // ✅ Folder Create
     fs.mkdirSync(extractPath, { recursive: true });
 
     const updated = [];
     const warnings = [];
 
+    // ✅ Unzip processing
     fs.createReadStream(zipPath)
       .pipe(unzipper.Extract({ path: extractPath }))
-      .on("finish", async () => {
-        const files = fs.readdirSync(extractPath);
+      .on("close", async () => {
+        // "finish" ki jagah "close" zyada reliable hai yahan
+        try {
+          const files = fs.readdirSync(extractPath);
 
-        for (const file of files) {
-          const filePath = path.join(extractPath, file);
+          for (const file of files) {
+            const filePath = path.join(extractPath, file);
 
-          // only images
-          if (!file.match(/\.(jpg|jpeg|png)$/i)) continue;
+            if (!file.match(/\.(jpg|jpeg|png)$/i)) continue;
 
-          // s1.jpg / f1.jpg / m1.jpg
-          const match = file.match(/^([sfm])(\d+)\./i);
-          if (!match) {
-            warnings.push(`Invalid file name: ${file}`);
-            continue;
+            const match = file.match(/^([sfm])(\d+)\./i);
+            if (!match) {
+              warnings.push(`Invalid file name: ${file}`);
+              continue;
+            }
+
+            const type = match[1].toLowerCase();
+            const serialNo = Number(match[2]);
+
+            const student = await studentModel.findOne({ serialNo });
+            if (!student) {
+              warnings.push(`Student not found for serialNo: ${serialNo}`);
+              continue;
+            }
+
+            // Upload to Cloudinary
+            const uploadRes = await cloudinary.uploader.upload(filePath, {
+              folder: `student-parents-photos/${batch}`,
+              public_id: file.replace(path.extname(file), ""),
+              overwrite: true,
+            });
+
+            if (type === "f") student.fatherPhoto = uploadRes.secure_url;
+            else if (type === "m") student.motherPhoto = uploadRes.secure_url;
+            else if (type === "s") student.photo = uploadRes.secure_url;
+
+            await student.save();
+            updated.push({ serialNo, type, url: uploadRes.secure_url });
           }
 
-          const type = match[1].toLowerCase(); // s | f | m
-          const serialNo = Number(match[2]);
+          // 🔥 Cleanup Logic Start 🔥
 
-          const student = await studentModel.findOne({ serialNo });
-          if (!student) {
-            warnings.push(`Student not found for serialNo: ${serialNo}`);
-            continue;
+          // 1. Delete extracted files & folder
+          if (fs.existsSync(extractPath)) {
+            fs.rmSync(extractPath, { recursive: true, force: true });
           }
 
-          // upload to cloudinary
-          const uploadRes = await cloudinary.uploader.upload(filePath, {
-            folder: `student-parents-photos/${batch}`,
-            public_id: file.replace(path.extname(file), ""),
-            overwrite: true,
+          // 2. Delete the original uploaded ZIP file
+          if (fs.existsSync(zipPath)) {
+            fs.unlinkSync(zipPath);
+          }
+
+          // 🔥 Cleanup Logic End 🔥
+
+          return res.json({
+            success: true,
+            message: "Upload done and local storage cleaned!",
+            updatedCount: updated.length,
+            updated,
+            warnings,
           });
-
-          // save according to type
-          if (type === "f") {
-            student.fatherPhoto = uploadRes.secure_url;
-          } else if (type === "m") {
-            student.motherPhoto = uploadRes.secure_url;
-          } else if (type === "s") {
-            student.photo = uploadRes.secure_url; // 👈 STUDENT PHOTO
-          }
-
-          await student.save();
-
-          updated.push({
-            serialNo,
-            type:
-              type === "f"
-                ? "Father"
-                : type === "m"
-                ? "Mother"
-                : "Student",
-            url: uploadRes.secure_url,
-          });
+        } catch (innerError) {
+          console.error("Processing Error:", innerError);
+          res.status(500).json({ success: false, message: innerError.message });
         }
-
-        res.json({
-          success: true,
-          message:
-            "Student + Parent photos uploaded & records updated successfully",
-          updatedCount: updated.length,
-          updated,
-          warnings,
-        });
       });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };

@@ -5,28 +5,31 @@ import puppeteer from "puppeteer";
 
 const DEFAULT_FATHER = "https://your-default-image/father.png";
 const DEFAULT_MOTHER = "https://your-default-image/mother.png";
+const SCHOOL_LOGO =
+  "https://assets.zyrosite.com/cdn-cgi/image/format=auto,w=328,h=259,fit=crop/dOqNXeekPrHE45km/tcs-logo-123-d95rjaVGMBUEGBLg.png";
 
 export const generateBulkIDCards = async (req, res) => {
   try {
     const { startSerial, endSerial } = req.body;
 
-    // ✅ STEP 0: Validation FIRST
+    // ✅ STEP 0: Validation
     if (!startSerial || !endSerial) {
       return res.status(400).json({
+        success: false,
         message: "startSerial and endSerial are required",
       });
     }
 
-    // ✅ STEP 1: Ensure folder exists
-    const outputDir = process.env.VERCEL 
-      ? path.join("/tmp", "idcards") 
+    // ✅ STEP 1: Ensure output directory
+    const outputDir = process.env.VERCEL
+      ? path.join("/tmp", "idcards")
       : path.join("public", "idcards");
-    
+
     if (!fs.existsSync(outputDir)) {
       fs.mkdirSync(outputDir, { recursive: true });
     }
 
-    // ✅ STEP 2: PDF file name & path
+    // ✅ STEP 2: PDF file
     const fileName = `idcards-${startSerial}-${endSerial}.pdf`;
     const pdfPath = path.join(outputDir, fileName);
 
@@ -37,193 +40,278 @@ export const generateBulkIDCards = async (req, res) => {
 
     if (!students.length) {
       return res.status(404).json({
+        success: false,
         message: "No students found in this serial range",
       });
     }
 
-    const warnings = [];
     let html = "";
+    const warnings = [];
 
-    const browser = await puppeteer.launch({ headless: "new" });
-    const page = await browser.newPage();
-
+    // ✅ STEP 4: Build HTML
     for (const student of students) {
-      const fatherPhoto =
-        student.fatherPhoto && student.fatherPhoto !== "N/A"
-          ? student.fatherPhoto
-          : DEFAULT_FATHER;
-
-      const motherPhoto =
-        student.motherPhoto && student.motherPhoto !== "N/A"
-          ? student.motherPhoto
-          : DEFAULT_MOTHER;
-
-      if (student.fatherPhoto === "N/A" || student.motherPhoto === "N/A") {
+      if (!student.photo) {
         warnings.push(
-          `Parent photo missing for Serial No: ${student.serialNo}`
+          `Student photo missing for Serial No: ${student.serialNo}`,
         );
       }
 
       html += `
-        <div class="id-card">
+      <div class="id-card">
+        <div class="card">
 
-  <!-- FRONT SIDE -->
-  <div class="card front">
-    <h2 class="school-name">GLOBAL PUBLIC SCHOOL</h2>
-    <p class="tagline">Knowledge • Excellence • Integrity</p>
+          <!-- HEADER -->
+          <div class="header">
+            <img class="logo" src="${SCHOOL_LOGO}" />
+            <div class="school-text">
+              <h2>Thawe Central School</h2>
+              <p>
+                BEDUTOLA, POST OFFICE-THAWE, GOPALGANJ<br/>
+                Phone: 9471404548 
+              </p>
+            </div>
+          </div>
 
-    <div class="photo-box">
-      <img src="${student.photo}" alt="Student Photo" />
-    </div>
+          <!-- PHOTO -->
+          <div class="photo-box">
+               <img src="${student.photo}" />
+               <div class="session">
+                Session ${student.session}
+          </div>
+        </div>
 
-    <h3 class="student-name">${student.studentName}</h3>
-    <p class="class">
-      Class ${student.className} - Section ${student.section || ""}
-    </p>
+          <!-- NAME -->
+          <h3 class="student-name">${student.studentName}</h3>
 
-    <div class="id-box">
-      ID: ${student.serialNo}
-    </div>
-  </div>
+          <!-- DETAILS -->
+          <div class="details">
+            <div><span>Admission No</span><span>${student.serialNo}</span></div>
+            <div><span>Roll No</span><span>${student.rollNo || "N/A"}</span></div>
+            <div><span>Class</span><span>${student.className} - ${student.section || ""} (2025-26)</span></div>
+            <div><span>Father</span><span>${student.fatherName}</span></div>
+            <div><span>Address</span><span>${student.address1 || "N/A"}</span></div>
+            <div><span>Phone</span><span>${student.mobile || "N/A"}</span></div>
+            <div><span>D.O.B</span><span>${student.dob}</span></div>
+            <div><span>Blood</span><span>${student.bloodGroup || "N/A"}</span></div>
+          </div>
 
-  <!-- BACK SIDE -->
-  <div class="card back">
-    <h2 class="school-name">GLOBAL PUBLIC SCHOOL</h2>
-    <p class="subtitle">Parent / Guardian Information</p>
+          
 
-    <div class="parents-box">
-      <div class="parent">
-        <img src="${fatherPhoto}" />
-        <p>Father</p>
+        </div>
       </div>
-
-      <div class="parent">
-        <img src="${motherPhoto}" />
-        <p>Mother</p>
-      </div>
-    </div>
-
-    <div class="address">
-      <strong>Address:</strong><br/>
-      ${student.address1 || "N/A"}
-    </div>
-  </div>
-
-</div>
       `;
     }
 
-    await page.setContent(`
-      <html>
-        <style>
-         body {
-  margin: 0;
-  padding: 0;
-  font-family: Arial, sans-serif;
-}
+    // ✅ STEP 5: Puppeteer
+    const browser = await puppeteer.launch({ headless: "new" });
+    const page = await browser.newPage();
 
-.id-card {
+    await page.setContent(`
+<html>
+<head>
+<style>
+  body {
+    margin: 0;
+    padding: 6mm;
+    font-family: Arial, sans-serif;
+  }
+
+  /* A4 : 4 x 2 GRID */
+  .page {
+  display: grid;
+  grid-template-columns: repeat(2, 85.6mm);
+  grid-template-rows: repeat(4, 54mm);
+  gap: 6mm;
+  justify-content: center;
   page-break-after: always;
 }
 
-.card {
-  width: 350px;
-  height: 220px;
+  /* CARD SIZE */
+  .card {
+    width: 85.6mm;
+    height: 54mm;
+    border: 1px solid #000;
+    box-sizing: border-box;
+    overflow: hidden;
+  }
+
+  /* ===== HEADER (IMAGE 1 STYLE) ===== */
+  .header {
+    display: flex;
+    align-items: center;
+    border-bottom: 1px solid #000;
+    padding: 1.5mm;
+  }
+
+  .logo {
+    width: 12mm;
+    height: 12mm;
+  }
+
+  .school-text {
+    flex: 1;
+    text-align: center;
+    font-size: 6pt;
+  }
+
+  .school-text h2 {
+    margin: 0;
+    font-size: 8pt;
+    font-weight: bold;
+  }
+
+  .school-text p {
+    margin: 0;
+    font-size: 5.5pt;
+  }
+  .session {
+  font-size: 5pt;
+  font-weight: bold;
+  margin-top: 0.5mm;
+  }
+
+  /* TITLE BAR */
+  .title-bar {
+    background: #777;
+    color: #fff;
+    text-align: center;
+    font-size: 6pt;
+    font-weight: bold;
+    padding: 1mm 0;
+  }
+
+  /* ===== CONTENT (IMAGE 2 STYLE) ===== */
+  .content {
+    display: flex;
+    padding: 2mm;
+  }
+
+  .photo-box {
+  width: 18mm;
+  height: auto;
   border: 1px solid #000;
-  padding: 10px;
-  box-sizing: border-box;
+  margin-right: 2mm;
   text-align: center;
 }
 
-/* COMMON */
-.school-name {
-  font-size: 16px;
-  margin: 5px 0;
-  font-weight: bold;
-}
+  .photo-box img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
 
-.tagline,
-.subtitle {
-  font-size: 11px;
-  margin-bottom: 8px;
-}
+  .details {
+    font-size: 5.8pt;
+    line-height: 1.4;
+    flex: 1;
+  }
 
-/* FRONT */
-.photo-box {
-  width: 110px;
-  height: 130px;
-  border: 1px solid #000;
-  margin: 0 auto 8px;
-}
+  .details div {
+    display: flex;
+  }
 
-.photo-box img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
+  .details span:first-child {
+    width: 40%;
+    font-weight: bold;
+  }
 
-.student-name {
-  font-size: 14px;
-  margin: 5px 0;
-}
+  .details span:last-child {
+    width: 60%;
+  }
 
-.class {
-  font-size: 12px;
-}
+  /* BARCODE */
+  .barcode {
+    text-align: center;
+    margin-top: 1mm;
+  }
 
-.id-box {
-  margin-top: 8px;
-  font-size: 12px;
-  border: 1px solid #000;
-  display: inline-block;
-  padding: 4px 10px;
-}
+  .barcode img {
+    width: 30mm;
+    height: 7mm;
+  }
 
-/* BACK */
-.parents-box {
-  display: flex;
-  justify-content: space-around;
-  margin: 10px 0;
-}
+  .barcode p {
+    margin: 0;
+    font-size: 5pt;
+  }
+</style>
+</head>
 
-.parent img {
-  width: 60px;
-  height: 60px;
-  border: 1px solid #000;
-  object-fit: cover;
-}
+<body>
+${(() => {
+  let pages = "";
+  for (let i = 0; i < students.length; i += 8) {
+    pages += `<div class="page">`;
 
-.parent p {
-  font-size: 11px;
-  margin-top: 4px;
-}
+    students.slice(i, i + 8).forEach((student) => {
+      pages += `
+      <div class="card">
 
-.address {
-  font-size: 11px;
-  border-top: 1px solid #000;
-  padding-top: 6px;
-}
+        <!-- HEADER -->
+        <div class="header">
+          <img class="logo" src="${SCHOOL_LOGO}" />
+          <div class="school-text">
+            <h2>Thawe Central School</h2>
+            <p>POST OFFICE - THAWE, DIST - GOPALGANJ<br/>Ph: 9471404548</p>
+          </div>
+        </div>
 
-        </style>
-        <body>${html}</body>
-      </html>
-    `);
+        <!-- TITLE -->
+        <div class="title-bar">STUDENT IDENTITY CARD</div>
+
+        <!-- CONTENT -->
+        <div class="content">
+          <div class="photo-box">
+            <img src="${student.photo}" />
+          </div>
+
+          <div class="details">
+            <div><span>Name</span><span>${student.studentName}</span></div>
+            <div><span>Session</span><span>${student.session}</span></div>
+            <div><span>Class/Section</span><span>${student.className}-${student.section || ""}</span></div>
+            <div><span>Roll</span><span>${student.rollNo || "N/A"}</span></div>
+            <div><span>Father</span><span>${student.fatherName}</span></div>
+            <div><span>Phone</span><span>${student.mobile || "N/A"}</span></div>
+            <div><span>DOB</span><span>${student.dob}</span></div>
+            <div><span>Add</span><span>${student.address1 || "N/A"}</span></div>
+            <div><span></span><span>${student.address2 || "N/A"}</span></div>
+          </div>
+        </div>
+
+        
+
+      </div>`;
+    });
+
+    pages += `</div>`;
+  }
+  return pages;
+})()}
+</body>
+</html>
+`);
 
     await page.pdf({
       path: pdfPath,
       format: "A4",
       printBackground: true,
+      margin: {
+        top: "5mm",
+        bottom: "5mm",
+        left: "5mm",
+        right: "5mm",
+      },
     });
 
     await browser.close();
 
-    // ✅ STEP 4: Response with DOWNLOAD URL
+    // ✅ STEP 6: Response
     res.json({
       success: true,
       message: "Bulk ID cards generated successfully",
       range: `${startSerial} - ${endSerial}`,
       total: students.length,
-      fileName: fileName,
+      fileName,
       downloadUrl: `/api/v1/idcard/download/${fileName}`,
       warnings,
     });
@@ -248,21 +336,21 @@ export const generateBulkIDCardsByClassSection = async (req, res) => {
       });
     }
 
-    // ✅ STEP 1: Ensure folder exists
-    const outputDir = process.env.VERCEL 
-      ? path.join("/tmp", "idcards") 
+    // ✅ STEP 1: Ensure output directory
+    const outputDir = process.env.VERCEL
+      ? path.join("/tmp", "idcards")
       : path.join("public", "idcards");
-    
+
     if (!fs.existsSync(outputDir)) {
       fs.mkdirSync(outputDir, { recursive: true });
     }
 
     // ✅ STEP 2: File name
-    const safeSection = section ? section : "ALL";
+    const safeSection = section || "ALL";
     const fileName = `idcards-${className}-${safeSection}.pdf`;
     const pdfPath = path.join(outputDir, fileName);
 
-    // ✅ STEP 3: Build query
+    // ✅ STEP 3: Query
     const query = { className };
     if (section) query.section = section;
 
@@ -277,119 +365,141 @@ export const generateBulkIDCardsByClassSection = async (req, res) => {
     }
 
     const warnings = [];
-    let html = "";
 
+    // ✅ STEP 5: BUILD HTML (IMPORTANT FIX)
+    let pagesHTML = "";
+
+    for (let i = 0; i < students.length; i += 8) {
+      pagesHTML += `<div class="page">`;
+
+      students.slice(i, i + 8).forEach((student) => {
+        if (!student.photo) {
+          warnings.push(`Photo missing for Serial No: ${student.serialNo}`);
+        }
+
+        pagesHTML += `
+          <div class="card">
+            <div class="header">
+              <img class="logo" src="${SCHOOL_LOGO}" />
+              <div class="school-text">
+                <h2>Thawe Central School</h2>
+              <p>
+                BEDUTOLA, POST OFFICE-THAWE, GOPALGANJ<br/>
+                Phone: 9471404548 
+              </p>
+              </div>
+            </div>
+
+            <div class="title-bar">STUDENT IDENTITY CARD</div>
+
+            <div class="content">
+              <div class="photo-box">
+                <img src="${student.photo || ""}" />
+              </div>
+
+              <div class="details">
+               <div><span>Name</span><span>${student.studentName}</span></div>
+               <div><span>Session</span><span>${student.session}</span></div>
+               <div><span>Class/Section</span><span>${student.className}-${student.section || ""}</span></div>
+               <div><span>Roll</span><span>${student.rollNo || "N/A"}</span></div>
+               <div><span>Father</span><span>${student.fatherName}</span></div>
+               <div><span>Phone</span><span>${student.mobile || "N/A"}</span></div>
+               <div><span>DOB</span><span>${student.dob}</span></div>
+               <div><span>Add</span><span>${student.address1 || "N/A"}</span></div>
+               <div><span></span><span>${student.address2 || "N/A"}</span></div>
+              </div>
+            </div>
+          </div>
+        `;
+      });
+
+      pagesHTML += `</div>`;
+    }
+
+    // ✅ STEP 6: Puppeteer
     const browser = await puppeteer.launch({ headless: "new" });
     const page = await browser.newPage();
 
-    for (const student of students) {
-      const fatherPhoto =
-        student.fatherPhoto && student.fatherPhoto !== "N/A"
-          ? student.fatherPhoto
-          : DEFAULT_FATHER;
-
-      const motherPhoto =
-        student.motherPhoto && student.motherPhoto !== "N/A"
-          ? student.motherPhoto
-          : DEFAULT_MOTHER;
-
-      if (student.fatherPhoto === "N/A" || student.motherPhoto === "N/A") {
-        warnings.push(
-          `Parent photo missing for Serial No: ${student.serialNo}`
-        );
-      }
-
-      html += `
-       <div class="id-card">
-
-  <!-- FRONT SIDE -->
-  <div class="card front">
-    <h2 class="school-name">GLOBAL PUBLIC SCHOOL</h2>
-    <p class="tagline">Knowledge • Excellence • Integrity</p>
-
-    <div class="photo-box">
-      <img src="${student.photo}" alt="Student Photo" />
-    </div>
-
-    <h3 class="student-name">${student.studentName}</h3>
-    <p class="class">
-      Class ${student.className} - Section ${student.section || ""}
-    </p>
-
-    <div class="id-box">
-      ID: ${student.serialNo}
-    </div>
-  </div>
-
-  <!-- BACK SIDE -->
-  <div class="card back">
-    <h2 class="school-name">GLOBAL PUBLIC SCHOOL</h2>
-    <p class="subtitle">Parent / Guardian Information</p>
-
-    <div class="parents-box">
-      <div class="parent">
-        <img src="${fatherPhoto}" />
-        <p>Father</p>
-      </div>
-
-      <div class="parent">
-        <img src="${motherPhoto}" />
-        <p>Mother</p>
-      </div>
-    </div>
-
-    <div class="address">
-      <strong>Address:</strong><br/>
-      ${student.address1 || "N/A"}
-    </div>
-  </div>
-
-</div>
-
-      `;
-    }
-
     await page.setContent(`
-      <html>
-        <style>
+<!DOCTYPE html>
+<html>
+<head>
+<style>
 body {
   margin: 0;
-  padding: 0;
+  padding: 6mm;
   font-family: Arial, sans-serif;
 }
 
-.id-card {
+/* A4 GRID : 4 x 2 */
+.page {
+  display: grid;
+  grid-template-columns: repeat(2, 85.6mm);
+  grid-template-rows: repeat(4, 54mm);
+  gap: 6mm;
+  justify-content: center;
   page-break-after: always;
 }
 
+/* CARD */
 .card {
-  width: 350px;
-  height: 220px;
+  width: 85.6mm;
+  height: 54mm;
   border: 1px solid #000;
-  padding: 10px;
   box-sizing: border-box;
+  overflow: hidden;
+}
+
+/* HEADER */
+.header {
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid #000;
+  padding: 1.5mm;
+}
+
+.logo {
+  width: 12mm;
+  height: 12mm;
+}
+
+.school-text {
+  flex: 1;
   text-align: center;
+  font-size: 6pt;
 }
 
-/* COMMON */
-.school-name {
-  font-size: 16px;
-  margin: 5px 0;
+.school-text h2 {
+  margin: 0;
+  font-size: 8pt;
+}
+
+.school-text p {
+  margin: 0;
+  font-size: 5.5pt;
+}
+
+/* TITLE */
+.title-bar {
+  background: #777;
+  color: #fff;
+  text-align: center;
+  font-size: 6pt;
   font-weight: bold;
+  padding: 1mm 0;
 }
 
-.tagline,
-.subtitle {
-  font-size: 11px;
-  margin-bottom: 8px;
+/* CONTENT */
+.content {
+  display: flex;
+  padding: 2mm;
 }
 
-/* FRONT */
 .photo-box {
-  width: 110px;
-  height: 130px;
+  width: 18mm;
+  height: 22mm;
   border: 1px solid #000;
-  margin: 0 auto 8px;
+  margin-right: 2mm;
 }
 
 .photo-box img {
@@ -398,71 +508,247 @@ body {
   object-fit: cover;
 }
 
-.student-name {
-  font-size: 14px;
-  margin: 5px 0;
+.details {
+  font-size: 5.8pt;
+  line-height: 1.4;
+  flex: 1;
 }
 
-.class {
-  font-size: 12px;
-}
-
-.id-box {
-  margin-top: 8px;
-  font-size: 12px;
-  border: 1px solid #000;
-  display: inline-block;
-  padding: 4px 10px;
-}
-
-/* BACK */
-.parents-box {
+.details div {
   display: flex;
-  justify-content: space-around;
-  margin: 10px 0;
 }
 
-.parent img {
-  width: 60px;
-  height: 60px;
-  border: 1px solid #000;
-  object-fit: cover;
+.details span:first-child {
+  width: 40%;
+  font-weight: bold;
 }
 
-.parent p {
-  font-size: 11px;
-  margin-top: 4px;
+.details span:last-child {
+  width: 60%;
 }
+</style>
+</head>
 
-.address {
-  font-size: 11px;
-  border-top: 1px solid #000;
-  padding-top: 6px;
-}
-
-        </style>
-        <body>${html}</body>
-      </html>
-    `);
+<body>
+${pagesHTML}
+</body>
+</html>
+`);
 
     await page.pdf({
       path: pdfPath,
       format: "A4",
       printBackground: true,
+      margin: {
+        top: "5mm",
+        bottom: "5mm",
+        left: "5mm",
+        right: "5mm",
+      },
     });
 
     await browser.close();
 
-    // ✅ STEP 5: Response
+    // ✅ STEP 7: Response
     res.json({
       success: true,
       message: "Bulk ID cards generated successfully (Class/Section)",
       className,
-      section: section || "ALL",
+      section: safeSection,
       total: students.length,
       fileName,
       downloadUrl: `/api/v1/idcard/download/${fileName}`,
       warnings,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// ✅ GENERATE BULK ID CARD BACK SIDE (COUNT BASED)
+export const generateBulkIDCardBackByCount = async (req, res) => {
+  try {
+    const { count } = req.body;
+
+    // ✅ Validation
+    if (!count || count <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Valid count is required",
+      });
+    }
+
+    // ✅ Output directory
+    const outputDir = process.env.VERCEL
+      ? path.join("/tmp", "idcards")
+      : path.join("public", "idcards");
+
+    if (!fs.existsSync(outputDir)) {
+      fs.mkdirSync(outputDir, { recursive: true });
+    }
+
+    const fileName = `idcards-back-${count}.pdf`;
+    const pdfPath = path.join(outputDir, fileName);
+
+    // ✅ Guidelines
+    const GUIDELINES = [
+      "Always carry your school ID card during school hours.",
+      "Your ID card is required for accessing school facilities.",
+      "Notify the school immediately if your ID card is lost or damaged.",
+      "Misuse of ID cards will result in disciplinary action.",
+      "All students must comply with school ID card rules.",
+      "ID card must be shown on demand by school authorities.",
+      "This card is non-transferable and must be used only by the owner.",
+      "Keep the card away from strong heat and magnetic fields.",
+      "If found, please return this card to the school office.",
+    ];
+
+    // ✅ Address & Phone
+    const SCHOOL_ADDRESS = `
+      BEDUTOLA, POST OFFICE - THAWE, DIST - GOPALGANJ, PIN - 841440<br/>
+      Ph: +91 - 9471404548, +91 - 7050154850
+    `;
+
+    // ✅ Build HTML (8 cards per page)
+    let pagesHTML = "";
+
+    for (let i = 0; i < count; i += 8) {
+      pagesHTML += `<div class="page">`;
+
+      for (let j = 0; j < 8 && i + j < count; j++) {
+        pagesHTML += `
+          <div class="card back-card">
+            <div class="school-name">THAWE CENTRAL SCHOOL</div>
+
+            <div class="back-title">GUIDELINES FOR ID CARD</div>
+
+            <ul class="guidelines">
+              ${GUIDELINES.map((g) => `<li>${g}</li>`).join("")}
+            </ul>
+
+            <div class="back-footer">
+              ${SCHOOL_ADDRESS}
+            </div>
+          </div>
+        `;
+      }
+
+      pagesHTML += `</div>`;
+    }
+
+    // ✅ Puppeteer
+    const browser = await puppeteer.launch({
+      headless: "new",
+      args: ["--no-sandbox", "--disable-setuid-sandbox"],
+    });
+    const page = await browser.newPage();
+
+    await page.setContent(`
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+body {
+  margin: 0;
+  padding: 6mm;
+  font-family: Arial, sans-serif;
+}
+
+/* A4 GRID : 4 x 2 */
+.page {
+  display: grid;
+  grid-template-columns: repeat(2, 85.6mm);
+  grid-template-rows: repeat(4, 54mm);
+  gap: 6mm;
+  justify-content: center;
+  page-break-after: always;
+}
+
+/* CARD */
+.card {
+  width: 85.6mm;
+  height: 54mm;
+  border: 1px solid #000;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+}
+
+/* BACK DESIGN */
+.back-card {
+  padding: 2mm;
+  font-size: 5.5pt;
+}
+
+.school-name {
+  text-align: center;
+  font-weight: bold;
+  font-size: 7pt;
+  margin-bottom: 1mm;
+}
+
+.back-title {
+  background: #777; /* Updated Background to Grey */
+  color: #fff;
+  text-align: center;
+  font-weight: bold;
+  padding: 1mm;
+  font-size: 6pt;
+  margin-bottom: 1.5mm;
+}
+
+.guidelines {
+  padding-left: 4mm;
+  margin: 0;
+  flex-grow: 1;
+}
+
+.guidelines li {
+  margin-bottom: 0.8mm;
+}
+
+.back-footer {
+  border-top: 1px solid #000;
+  margin-top: 1mm;
+  padding-top: 1mm;
+  font-size: 5pt;
+  text-align: center;
+  font-weight: bold;
+  line-height: 1.2;
+}
+</style>
+</head>
+
+<body>
+${pagesHTML}
+</body>
+</html>
+`);
+
+    await page.pdf({
+      path: pdfPath,
+      format: "A4",
+      printBackground: true,
+      margin: {
+        top: "5mm",
+        bottom: "5mm",
+        left: "5mm",
+        right: "5mm",
+      },
+    });
+
+    await browser.close();
+
+    // ✅ Response
+    res.json({
+      success: true,
+      message: "ID card BACK side generated successfully",
+      totalBackCards: count,
+      fileName,
+      downloadUrl: `/api/v1/idcard/download/${fileName}`,
     });
   } catch (error) {
     res.status(500).json({

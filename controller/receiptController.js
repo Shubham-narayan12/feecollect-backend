@@ -9,60 +9,60 @@ export const receiptCollectFee = async (req, res) => {
   try {
     const {
       studentId,
-      monthlyRecords,
-      admissionFee,
-      annualFee,
-      extraFees,
-      paidAmount,
+      monthlyRecords = [],
+      admissionFee = 0,
+      annualFee = 0,
+      extraFees = [],
+      paidAmount = 0,
       paymentMode,
     } = req.body;
 
     const year = new Date().getFullYear();
 
-    // 1️⃣ Get Student Details using studentId
+    // 1️⃣ Student
     const student = await Student.findById(studentId);
     if (!student) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Student not found" });
+      return res.status(404).json({
+        success: false,
+        message: "Student not found",
+      });
     }
 
-    const studentName = student.studentName;
-    const fatherName = student.fatherName;
-    const className = student.className;
-    const section = student.section;
-    const rollNo = student.rollNo;
+    const { studentName, fatherName, className, section, rollNo } = student;
 
-    // 2️⃣ Generate Receipt Number
+    // 2️⃣ Receipt No
     const receiptNo = await generateNextReceiptNo();
 
     let tuitionFee = 0;
     let transportFee = 0;
     let months = [];
 
-    // 3️⃣ Monthly Records Calculation
-    if (monthlyRecords && Array.isArray(monthlyRecords)) {
+    // 3️⃣ Monthly Records
+    if (Array.isArray(monthlyRecords)) {
       monthlyRecords.forEach((m) => {
-        tuitionFee += m.tuitionFee || 0;
-        transportFee += m.transportFee || 0;
-        months.push(`${m.month}`);
+        tuitionFee += Number(m.tuitionFee || 0);
+        transportFee += Number(m.transportFee || 0);
+        if (m.month) months.push(m.month);
       });
     }
 
-    // 4️⃣ Extra Fees Total
-    const extraFeeTotal = extraFees?.reduce((sum, f) => sum + f.amount, 0) || 0;
+    // 4️⃣ Extra Fees
+    const extraFeeTotal = Array.isArray(extraFees)
+      ? extraFees.reduce((sum, f) => sum + Number(f.amount || 0), 0)
+      : 0;
 
-    // 5️⃣ Total Amount Calculation
+    // 5️⃣ Total Amount (🔥 FIXED)
     const totalAmount =
-      (admissionFee || 0) +
-      (annualFee || 0) +
+      Number(admissionFee) +
+      Number(annualFee) +
       tuitionFee +
       transportFee +
       extraFeeTotal;
 
-    const dueAmount = Math.max(totalAmount - paidAmount, 0);
+    const paid = Number(paidAmount);
+    const dueAmount = Math.max(totalAmount - paid, 0);
 
-    // 6️⃣ Save Receipt in DB
+    // 6️⃣ Save Receipt
     const newReceipt = await Receipt.create({
       receiptNo,
       studentId,
@@ -72,14 +72,14 @@ export const receiptCollectFee = async (req, res) => {
       section,
       rollNo,
 
-      admissionFee: admissionFee || 0,
-      annualFee: annualFee || 0,
+      admissionFee: Number(admissionFee),
+      annualFee: Number(annualFee),
       tuitionFee,
       transportFee,
       extraFees,
 
       totalAmount,
-      paidAmount,
+      paidAmount: paid,
       dueAmount,
 
       paymentMode,
@@ -90,7 +90,7 @@ export const receiptCollectFee = async (req, res) => {
     // 7️⃣ Generate PDF
     const fileName = await generateReceiptPDF(newReceipt);
 
-    // 8️⃣ Update PDF URL
+    // 8️⃣ Update file
     newReceipt.fileName = fileName;
     await newReceipt.save();
 
@@ -101,7 +101,10 @@ export const receiptCollectFee = async (req, res) => {
     });
   } catch (error) {
     console.error("Receipt Collect Error:", error);
-    return res.status(500).json({ success: false, message: error.message });
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
   }
 };
 
@@ -111,7 +114,7 @@ export const downloadReceipt = async (req, res) => {
     const { fileName } = req.params;
 
     // Use /tmp for Vercel serverless environment
-    const filePath = process.env.VERCEL 
+    const filePath = process.env.VERCEL
       ? path.join("/tmp", "receipts", fileName)
       : path.join("uploads", "receipts", fileName);
 

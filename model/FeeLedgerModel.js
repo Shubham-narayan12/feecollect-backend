@@ -92,7 +92,7 @@ const FeeLedgerSchema = new mongoose.Schema(
     ],
     lastPaymentDate: { type: Date },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 export default mongoose.model("FeeLedger", FeeLedgerSchema);

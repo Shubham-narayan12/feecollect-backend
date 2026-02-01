@@ -8,17 +8,19 @@ const studentSchema = new mongoose.Schema(
       unique: true,
     },
     studentName: { type: String, required: true }, // name
-    fatherName: { type: String, required: true },
+    fatherName: { type: String },
     motherName: { type: String },
 
     dob: { type: String, required: true },
     gender: {
       type: String,
-      enum: ["Boy", "Girl", "Other"],
       required: true,
     },
 
-    aadharNo: { type: String, unique: true },
+    aadharNo: {
+      type: String,
+      default: null,
+    },
     penNo: { type: String, required: true, unique: true },
     mobile: { type: String },
     fatherPhoto: {
@@ -103,7 +105,7 @@ const studentSchema = new mongoose.Schema(
       ref: "FeeLedger",
     },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 export default mongoose.model("Student", studentSchema);

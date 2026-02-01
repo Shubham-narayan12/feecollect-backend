@@ -5,81 +5,110 @@ import ExcelJS from "exceljs";
 import cloudinary from "../config/cloudinary.js";
 import { cleanupRequestFiles } from "../utils/fileCleanup.js";
 
-// CREATE STUDENT WITH PHOTOS
-export const createStudent = async (req, res) => {
+export const createStudent = async (req, res, next) => {
   try {
-    // 🔴 Parse multipart JSON
-    if (req.body.feeBenefit) {
+    // 🔴 Parse multipart JSON safely
+    if (req.body.feeBenefit)
       req.body.feeBenefit = JSON.parse(req.body.feeBenefit);
-    }
-
-    if (req.body.recommendedFees) {
+    if (req.body.recommendedFees)
       req.body.recommendedFees = JSON.parse(req.body.recommendedFees);
-    }
 
     const body = req.body;
+    if (body.aadharNo === "" || body.aadharNo === null) {
+      delete body.aadharNo;
+    }
 
-    // 1️⃣ Serial No
+    // ✅ 1. Required Fields Validation (Manual Check for specific messages)
+    const validations = [
+      { field: "studentName", message: "Student Name is required" },
+      { field: "dob", message: "Date of Birth is required" },
+      { field: "gender", message: "Gender is required" },
+      { field: "penNo", message: "PEN Number is required" },
+      { field: "session", message: "Academic Session is required" },
+      { field: "className", message: "Class Name is required" },
+    ];
+
+    for (const v of validations) {
+      if (!body[v.field] || body[v.field].toString().trim() === "") {
+        cleanupRequestFiles(req);
+        return res.status(400).json({ success: false, message: v.message });
+      }
+    }
+
+    // ✅ 2. Unique Attributes Validation (PEN & Aadhar)
+    // Hum DB mein check karenge ki ye values pehle se toh nahi hain
+    const existingStudent = await Student.findOne({
+      $or: [
+        { penNo: body.penNo },
+        ...(body.aadharNo ? [{ aadharNo: body.aadharNo }] : []),
+      ],
+    });
+
+    if (existingStudent) {
+      cleanupRequestFiles(req);
+      let duplicateField =
+        existingStudent.penNo === body.penNo ? "PEN Number" : "Aadhar Number";
+      return res.status(400).json({
+        success: false,
+        message: `${duplicateField} '${duplicateField === "PEN Number" ? body.penNo : body.aadharNo}' Already register.`,
+      });
+    }
+
+    // ✅ 3. Serial No generation
     const lastStudent = await Student.findOne()
       .sort({ serialNo: -1 })
       .select("serialNo");
-
     body.serialNo =
       body.serialNo || (lastStudent ? lastStudent.serialNo + 1 : 1);
 
-    // 2️⃣ Create Student
-    let student = await Student.create(body);
+    // ✅ 4. Create Student
+    const student = new Student(body);
 
-    // ✅ Fee Benefit (NOW WORKING)
+    // Fee Benefit Logic
     if (body.feeBenefit?.hasFeeBenefit === true) {
       student.feeBenefit = {
         hasFeeBenefit: true,
         description: body.feeBenefit.description || "",
         approvedAt: new Date(),
       };
-      await student.save();
     }
 
-    // 3️⃣ Upload Photos
-    if (req.files?.photo) {
-      const upload = await cloudinary.uploader.upload(req.files.photo[0].path, {
-        folder: "students/photo",
-        public_id: `student_${student.serialNo}`,
-        overwrite: true,
-      });
-      student.photo = upload.secure_url;
-    }
-
-    if (req.files?.fatherPhoto) {
-      const upload = await cloudinary.uploader.upload(
-        req.files.fatherPhoto[0].path,
-        {
-          folder: "students/father",
-          public_id: `father_${student.serialNo}`,
+    // ✅ 5. Upload Photos (Cloudinary)
+    const uploadPhoto = async (fileArray, folder, publicIdPrefix) => {
+      if (fileArray && fileArray[0]) {
+        const result = await cloudinary.uploader.upload(fileArray[0].path, {
+          folder: folder,
+          public_id: `${publicIdPrefix}_${body.serialNo}`,
           overwrite: true,
-        }
-      );
-      student.fatherPhoto = upload.secure_url;
-    }
+        });
+        return result.secure_url;
+      }
+      return null;
+    };
 
-    if (req.files?.motherPhoto) {
-      const upload = await cloudinary.uploader.upload(
-        req.files.motherPhoto[0].path,
-        {
-          folder: "students/mother",
-          public_id: `mother_${student.serialNo}`,
-          overwrite: true,
-        }
+    if (req.files?.photo)
+      student.photo = await uploadPhoto(
+        req.files.photo,
+        "students/photo",
+        "student",
       );
-      student.motherPhoto = upload.secure_url;
-    }
+    if (req.files?.fatherPhoto)
+      student.fatherPhoto = await uploadPhoto(
+        req.files.fatherPhoto,
+        "students/father",
+        "father",
+      );
+    if (req.files?.motherPhoto)
+      student.motherPhoto = await uploadPhoto(
+        req.files.motherPhoto,
+        "students/mother",
+        "mother",
+      );
 
     await student.save();
 
-    // 4️⃣ Auto Ledger (NOW recommendedFees WORKING)
+    // 6. Auto Ledger & Cleanup
     await createAutoLedger(student, body.recommendedFees || []);
-
-    // 5️⃣ Cleanup temporary files (important for Vercel /tmp cleanup)
     cleanupRequestFiles(req);
 
     res.status(201).json({
@@ -89,14 +118,8 @@ export const createStudent = async (req, res) => {
     });
   } catch (error) {
     console.error(error);
-    
-    // Cleanup files even on error
     cleanupRequestFiles(req);
-    
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    next(error);
   }
 };
 
@@ -111,7 +134,11 @@ export const bulkStudentApplyController = async (req, res) => {
     }
 
     const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(req.file.buffer);
+    if (req.file.mimetype === "text/csv") {
+      await workbook.csv.load(req.file.buffer);
+    } else {
+      await workbook.xlsx.load(req.file.buffer);
+    }
 
     const worksheet = workbook.worksheets[0];
     if (!worksheet) {
@@ -129,7 +156,7 @@ export const bulkStudentApplyController = async (req, res) => {
         .trim()
         .toLowerCase()
         .replace(/\s+/g, "_")
-        .replace(/[^a-z0-9_]/g, "")
+        .replace(/[^a-z0-9_]/g, ""),
     );
 
     const rows = [];
@@ -153,11 +180,11 @@ export const bulkStudentApplyController = async (req, res) => {
     // 🔹 Fetch existing Aadhar, Serial & PEN
     const existingStudents = await Student.find(
       {},
-      "aadharNo serialNo penNo"
+      "aadharNo serialNo penNo",
     ).lean();
 
     const existingAadhars = new Set(
-      existingStudents.map((s) => s.aadharNo).filter(Boolean)
+      existingStudents.map((s) => s.aadharNo).filter(Boolean),
     );
     const existingSerials = new Set(existingStudents.map((s) => s.serialNo));
     const existingPens = new Set(existingStudents.map((s) => s.penNo));
@@ -212,20 +239,20 @@ export const bulkStudentApplyController = async (req, res) => {
           serialNo,
           penNo,
 
-          studentName: row.studentname || "",
+          studentName: row.studentname?.toString().trim(),
           fatherName: row.fathername || "",
           motherName: row.mothername || null,
 
-          dob: row.dob || "",
-          gender: row.gender || "",
+          dob: row.dob,
+          gender: row.gender,
 
           aadharNo: aadharNo || null,
           mobile: row.mobile || null,
 
           photo: row.photo || null,
 
-          session: row.session || "",
-          className: row.class || row.classname || "",
+          session: row.session,
+          className: row.class || row.classname,
           section: row.section || null,
           rollNo: row.rollno || row.regno || null,
 
@@ -293,7 +320,7 @@ export const bulkStudentApplyController = async (req, res) => {
         if (dbError.writeErrors) {
           insertedStudents = dbError.result?.insertedDocs || [];
           dbError.writeErrors.forEach((e) =>
-            errors.push(`DB Error: ${e.errmsg}`)
+            errors.push(`DB Error: ${e.errmsg}`),
           );
         } else {
           throw dbError;
@@ -309,7 +336,7 @@ export const bulkStudentApplyController = async (req, res) => {
         await createAutoLedger(student);
       } catch (ledgerError) {
         errors.push(
-          `Ledger Error (${student.studentName}): ${ledgerError.message}`
+          `Ledger Error (${student.studentName}): ${ledgerError.message}`,
         );
       }
     }
