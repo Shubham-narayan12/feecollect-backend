@@ -14,16 +14,17 @@ export const createStudent = async (req, res, next) => {
       req.body.recommendedFees = JSON.parse(req.body.recommendedFees);
 
     const body = req.body;
-    if (body.aadharNo === "" || body.aadharNo === null) {
-      delete body.aadharNo;
-    }
 
-    // ✅ 1. Required Fields Validation (Manual Check for specific messages)
+    // 🔹 Clean empty optional fields
+    ["aadharNo", "penNo", "dob", "gender"].forEach((field) => {
+      if (body[field] === "" || body[field] === null) {
+        delete body[field];
+      }
+    });
+
+    // ✅ 1. REQUIRED FIELDS (as per new schema)
     const validations = [
       { field: "studentName", message: "Student Name is required" },
-      { field: "dob", message: "Date of Birth is required" },
-      { field: "gender", message: "Gender is required" },
-      { field: "penNo", message: "PEN Number is required" },
       { field: "session", message: "Academic Session is required" },
       { field: "className", message: "Class Name is required" },
     ];
@@ -35,29 +36,32 @@ export const createStudent = async (req, res, next) => {
       }
     }
 
-    // ✅ 2. Unique Attributes Validation (PEN & Aadhar)
-    // Hum DB mein check karenge ki ye values pehle se toh nahi hain
-    const existingStudent = await Student.findOne({
-      $or: [
-        { penNo: body.penNo },
-        ...(body.aadharNo ? [{ aadharNo: body.aadharNo }] : []),
-      ],
-    });
+    // ✅ 2. UNIQUE CHECK (only if value provided)
+    const orConditions = [];
+    if (body.penNo) orConditions.push({ penNo: body.penNo });
+    if (body.aadharNo) orConditions.push({ aadharNo: body.aadharNo });
 
-    if (existingStudent) {
-      cleanupRequestFiles(req);
-      let duplicateField =
-        existingStudent.penNo === body.penNo ? "PEN Number" : "Aadhar Number";
-      return res.status(400).json({
-        success: false,
-        message: `${duplicateField} '${duplicateField === "PEN Number" ? body.penNo : body.aadharNo}' Already register.`,
-      });
+    if (orConditions.length) {
+      const existingStudent = await Student.findOne({ $or: orConditions });
+
+      if (existingStudent) {
+        cleanupRequestFiles(req);
+        let duplicateField =
+          existingStudent.penNo === body.penNo
+            ? "PEN Number"
+            : "Aadhar Number";
+        return res.status(400).json({
+          success: false,
+          message: `${duplicateField} already registered`,
+        });
+      }
     }
 
     // ✅ 3. Serial No generation
     const lastStudent = await Student.findOne()
       .sort({ serialNo: -1 })
       .select("serialNo");
+
     body.serialNo =
       body.serialNo || (lastStudent ? lastStudent.serialNo + 1 : 1);
 
@@ -73,11 +77,11 @@ export const createStudent = async (req, res, next) => {
       };
     }
 
-    // ✅ 5. Upload Photos (Cloudinary)
+    // ✅ 5. Upload Photos
     const uploadPhoto = async (fileArray, folder, publicIdPrefix) => {
       if (fileArray && fileArray[0]) {
         const result = await cloudinary.uploader.upload(fileArray[0].path, {
-          folder: folder,
+          folder,
           public_id: `${publicIdPrefix}_${body.serialNo}`,
           overwrite: true,
         });
@@ -92,12 +96,14 @@ export const createStudent = async (req, res, next) => {
         "students/photo",
         "student",
       );
+
     if (req.files?.fatherPhoto)
       student.fatherPhoto = await uploadPhoto(
         req.files.fatherPhoto,
         "students/father",
         "father",
       );
+
     if (req.files?.motherPhoto)
       student.motherPhoto = await uploadPhoto(
         req.files.motherPhoto,
@@ -107,11 +113,11 @@ export const createStudent = async (req, res, next) => {
 
     await student.save();
 
-    // 6. Auto Ledger & Cleanup
+    // ✅ 6. Auto Ledger
     await createAutoLedger(student, body.recommendedFees || []);
     cleanupRequestFiles(req);
 
-    res.status(201).json({
+    return res.status(201).json({
       success: true,
       message: "Student created successfully",
       data: student,
@@ -123,7 +129,7 @@ export const createStudent = async (req, res, next) => {
   }
 };
 
-// BULK STUDENT APPLY
+//STUDENT BULK UPLOADER
 export const bulkStudentApplyController = async (req, res) => {
   try {
     if (!req.file) {
@@ -149,24 +155,24 @@ export const bulkStudentApplyController = async (req, res) => {
     }
 
     // 🔹 Normalize headers
-    const headerRow = worksheet.getRow(1);
-    const headers = headerRow.values.slice(1).map((h) =>
-      (h || "")
-        .toString()
-        .trim()
-        .toLowerCase()
-        .replace(/\s+/g, "_")
-        .replace(/[^a-z0-9_]/g, ""),
-    );
+    const headers = worksheet
+      .getRow(1)
+      .values.slice(1)
+      .map((h) =>
+        (h || "")
+          .toString()
+          .trim()
+          .toLowerCase()
+          .replace(/\s+/g, "_")
+          .replace(/[^a-z0-9_]/g, ""),
+      );
 
     const rows = [];
     worksheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
       if (rowNumber === 1) return;
       const values = row.values.slice(1);
       const obj = {};
-      headers.forEach((h, i) => {
-        obj[h] = values[i] !== undefined ? values[i] : null;
-      });
+      headers.forEach((h, i) => (obj[h] = values[i] ?? null));
       rows.push(obj);
     });
 
@@ -177,173 +183,115 @@ export const bulkStudentApplyController = async (req, res) => {
       });
     }
 
-    // 🔹 Fetch existing Aadhar, Serial & PEN
+    // 🔹 Fetch existing
     const existingStudents = await Student.find(
       {},
-      "aadharNo serialNo penNo",
+      "serialNo penNo aadharNo",
     ).lean();
 
+    const existingSerials = new Set(existingStudents.map((s) => s.serialNo));
+    const existingPens = new Set(
+      existingStudents.map((s) => s.penNo).filter(Boolean),
+    );
     const existingAadhars = new Set(
       existingStudents.map((s) => s.aadharNo).filter(Boolean),
     );
-    const existingSerials = new Set(existingStudents.map((s) => s.serialNo));
-    const existingPens = new Set(existingStudents.map((s) => s.penNo));
 
-    let successCount = 0;
-    let skipCount = 0;
-    const errors = [];
     const studentsToInsert = [];
+    const errors = [];
 
-    // =========================
-    // 🔁 ROW PROCESSING
-    // =========================
     for (let i = 0; i < rows.length; i++) {
-      try {
-        const row = rows[i];
+      const row = rows[i];
 
-        if (!row.serialno) {
-          errors.push(`Row ${i + 2}: Serial No missing`);
-          skipCount++;
-          continue;
-        }
+      const serialNo = row.serialno ? Number(row.serialno) : null;
+      const penNo = row.penno ? String(row.penno).trim() : null;
+      const aadharNo = row.aadharno ? String(row.aadharno).trim() : null;
 
-        if (!row.penno) {
-          errors.push(`Row ${i + 2}: PEN No missing`);
-          skipCount++;
-          continue;
-        }
-
-        const serialNo = Number(row.serialno);
-        const penNo = String(row.penno).trim();
-        const aadharNo = row.aadharno ? String(row.aadharno).trim() : null;
-
-        if (existingSerials.has(serialNo)) {
-          errors.push(`Row ${i + 2}: Serial No already exists (${serialNo})`);
-          skipCount++;
-          continue;
-        }
-
-        if (existingPens.has(penNo)) {
-          errors.push(`Row ${i + 2}: PEN No already exists (${penNo})`);
-          skipCount++;
-          continue;
-        }
-
-        if (aadharNo && existingAadhars.has(aadharNo)) {
-          errors.push(`Row ${i + 2}: Aadhar already exists (${aadharNo})`);
-          skipCount++;
-          continue;
-        }
-
-        const studentData = {
-          serialNo,
-          penNo,
-
-          studentName: row.studentname?.toString().trim(),
-          fatherName: row.fathername || "",
-          motherName: row.mothername || null,
-
-          dob: row.dob,
-          gender: row.gender,
-
-          aadharNo: aadharNo || null,
-          mobile: row.mobile || null,
-
-          photo: row.photo || null,
-
-          session: row.session,
-          className: row.class || row.classname,
-          section: row.section || null,
-          rollNo: row.rollno || row.regno || null,
-
-          address1: row.address1 || null,
-          address2: row.address2 || null,
-          city: row.city || null,
-
-          religion: row.religion || null,
-          category: row.category || null,
-          bloodGroup: row.bloodgroup || null,
-
-          transport: row.transport || "N/A",
-          vehicle: row.vehicle || "N/A",
-          discount: row.discount || "N/A",
-
-          tc: row.tc || "No",
-          charCert: row.charcert || "No",
-          reportCard: row.reportcard || "No",
-          dobCert: row.dobcert || "No",
-        };
-
-        // 🔴 REQUIRED FIELDS
-        const requiredFields = [
-          "serialNo",
-          "penNo",
-          "studentName",
-          "fatherName",
-          "dob",
-          "gender",
-          "session",
-          "className",
-        ];
-
-        const missing = requiredFields.filter((field) => !studentData[field]);
-
-        if (missing.length) {
-          errors.push(`Row ${i + 2}: Missing fields - ${missing.join(", ")}`);
-          skipCount++;
-          continue;
-        }
-
-        studentsToInsert.push(studentData);
-
-        existingSerials.add(serialNo);
-        existingPens.add(penNo);
-        if (aadharNo) existingAadhars.add(aadharNo);
-
-        successCount++;
-      } catch (err) {
-        errors.push(`Row ${i + 2}: ${err.message}`);
-        skipCount++;
+      if (!serialNo) {
+        errors.push(`Row ${i + 2}: Serial No missing`);
+        continue;
       }
+
+      if (existingSerials.has(serialNo)) {
+        errors.push(`Row ${i + 2}: Serial No already exists`);
+        continue;
+      }
+
+      if (penNo && existingPens.has(penNo)) {
+        errors.push(`Row ${i + 2}: PEN No already exists`);
+        continue;
+      }
+
+      if (aadharNo && existingAadhars.has(aadharNo)) {
+        errors.push(`Row ${i + 2}: Aadhar already exists`);
+        continue;
+      }
+
+      const studentData = {
+        serialNo,
+        penNo,
+        aadharNo,
+
+        studentName: row.studentname?.trim(),
+        fatherName: row.fathername || null,
+        motherName: row.mothername || null,
+
+        dob: row.dob || null,
+        gender: row.gender || null,
+
+        mobile: row.mobile || null,
+        photo: row.photo || null,
+
+        session: row.session,
+        className: row.class || row.classname,
+        section: row.section || null,
+        rollNo: row.rollno || null,
+
+        address1: row.address1 || null,
+        address2: row.address2 || null,
+        city: row.city || null,
+
+        religion: row.religion || null,
+        category: row.category || null,
+        bloodGroup: row.bloodgroup || null,
+
+        transport: row.transport || "N/A",
+        vehicle: row.vehicle || "N/A",
+        discount: row.discount || "N/A",
+
+        tc: row.tc || "No",
+        charCert: row.charcert || "No",
+        reportCard: row.reportcard || "No",
+        dobCert: row.dobcert || "No",
+      };
+
+      // ✅ REQUIRED as per new schema
+      if (!studentData.studentName || !studentData.session || !studentData.className) {
+        errors.push(`Row ${i + 2}: Missing required fields`);
+        continue;
+      }
+
+      studentsToInsert.push(studentData);
+      existingSerials.add(serialNo);
+      if (penNo) existingPens.add(penNo);
+      if (aadharNo) existingAadhars.add(aadharNo);
     }
 
-    // =========================
-    // 💾 INSERT STUDENTS
-    // =========================
-    let insertedStudents = [];
-    if (studentsToInsert.length) {
-      try {
-        insertedStudents = await Student.insertMany(studentsToInsert, {
-          ordered: false,
-        });
-      } catch (dbError) {
-        if (dbError.writeErrors) {
-          insertedStudents = dbError.result?.insertedDocs || [];
-          dbError.writeErrors.forEach((e) =>
-            errors.push(`DB Error: ${e.errmsg}`),
-          );
-        } else {
-          throw dbError;
-        }
-      }
-    }
+    const insertedStudents = await Student.insertMany(studentsToInsert, {
+      ordered: false,
+    });
 
-    // =========================
-    // 📒 AUTO LEDGER
-    // =========================
     for (const student of insertedStudents) {
       try {
         await createAutoLedger(student);
-      } catch (ledgerError) {
-        errors.push(
-          `Ledger Error (${student.studentName}): ${ledgerError.message}`,
-        );
+      } catch (e) {
+        errors.push(`Ledger error for ${student.studentName}`);
       }
     }
 
     return res.status(200).json({
       success: true,
-      message: "Bulk upload completed successfully",
+      message: "Bulk upload completed",
       totalRows: rows.length,
       inserted: insertedStudents.length,
       skipped: rows.length - insertedStudents.length,
@@ -358,6 +306,7 @@ export const bulkStudentApplyController = async (req, res) => {
     });
   }
 };
+
 
 //SEARCH STUDENT BY SESSION, CLASS, ROLLNO and STDEUNT NAME
 export const searchStudent = async (req, res) => {

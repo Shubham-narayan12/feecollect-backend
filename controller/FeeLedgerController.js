@@ -1,7 +1,6 @@
 import FeeLedger from "../model/FeeLedgerModel.js";
 import Student from "../model/studentModel.js";
 
-
 //AUTO CREATION
 export const createAutoLedger = async (student, recommendedFees = []) => {
   try {
@@ -100,7 +99,7 @@ export const collectFee = async (req, res) => {
     if (monthlyRecords && Array.isArray(monthlyRecords)) {
       monthlyRecords.forEach((m) => {
         const monthRecord = ledger.monthlyRecords.find(
-          (rec) => rec.month === m.month && rec.year === m.year
+          (rec) => rec.month === m.month && rec.year === m.year,
         );
 
         if (monthRecord) {
@@ -112,7 +111,7 @@ export const collectFee = async (req, res) => {
             (monthRecord.tuitionFee || 0) + (monthRecord.transportFee || 0);
 
           monthRecord.paidAmount = monthTotal;
-          
+
           monthRecord.status = "Paid";
 
           totalBill += monthTotal;
@@ -149,6 +148,16 @@ export const collectFee = async (req, res) => {
 
       // ✅ Mark extraFees as modified bhi
       ledger.markModified("extraFees");
+    }
+
+    // 5️⃣ Validate Paid Amount
+    if (paidAmount > totalBill) {
+      return res.status(400).json({
+        success: false,
+        message: "Paid amount cannot be greater than total bill",
+        totalBill,
+        paidAmount,
+      });
     }
 
     // 5️⃣ Calculate current due amount
@@ -227,22 +236,22 @@ export const getLedgerByStudentId = async (req, res) => {
     // 3️⃣ SUMMARY CALCULATION
     const totalMonthlyPaid = monthlyRecords.reduce(
       (sum, r) => sum + (r.paidAmount || 0),
-      0
+      0,
     );
 
     const totalMonthlyDue = monthlyRecords.reduce(
       (sum, r) => sum + (r.dueAmount || 0),
-      0
+      0,
     );
 
     const totalExtraPaid = extraFees.reduce(
       (sum, r) => sum + (r.amount && r.status === "Paid" ? r.amount : 0),
-      0
+      0,
     );
 
     const totalExtraDue = extraFees.reduce(
       (sum, r) => sum + (r.amount && r.status === "Unpaid" ? r.amount : 0),
-      0
+      0,
     );
 
     const admissionDue = ledger.admissionFee.dueAmount || 0;
@@ -330,7 +339,7 @@ export const createRecommendedFeeForIndivualStudent = async (req, res) => {
           "feeBenefit.approvedAt": new Date(),
         },
       },
-      { new: true }
+      { new: true },
     );
 
     if (!student) {
@@ -348,7 +357,7 @@ export const createRecommendedFeeForIndivualStudent = async (req, res) => {
           recommendedFees: recommendedFees,
         },
       },
-      { new: true }
+      { new: true },
     );
 
     if (!ledger) {
@@ -373,7 +382,6 @@ export const createRecommendedFeeForIndivualStudent = async (req, res) => {
   }
 };
 
-
 export const deleteOneRecommendedFee = async (req, res) => {
   try {
     const { studentId, recommendedFeeId } = req.params;
@@ -397,7 +405,7 @@ export const deleteOneRecommendedFee = async (req, res) => {
 
     // 🔹 Check if recommended fee exists
     const feeExists = ledger.recommendedFees.some(
-      (fee) => fee._id.toString() === recommendedFeeId
+      (fee) => fee._id.toString() === recommendedFeeId,
     );
 
     if (!feeExists) {
@@ -409,7 +417,7 @@ export const deleteOneRecommendedFee = async (req, res) => {
 
     // 🔹 Remove one recommended fee
     ledger.recommendedFees = ledger.recommendedFees.filter(
-      (fee) => fee._id.toString() !== recommendedFeeId
+      (fee) => fee._id.toString() !== recommendedFeeId,
     );
 
     await ledger.save();
