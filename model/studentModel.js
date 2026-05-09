@@ -7,22 +7,24 @@ const studentSchema = new mongoose.Schema(
       type: Number,
       unique: true,
     },
-    studentName: { type: String, required: true }, // name
+    studentName: { type: String, required: true },
     fatherName: { type: String },
     motherName: { type: String },
 
-    dob: { type: String, required: true },
-    gender: {
-      type: String,
-      required: true,
-    },
+    dob: { type: String }, // ❌ required removed
+    gender: { type: String }, // ❌ required removed
 
     aadharNo: {
       type: String,
       default: null,
     },
-    penNo: { type: String, required: true, unique: true },
+
+    penNo: {
+      type: String,
+    },
+
     mobile: { type: String },
+
     fatherPhoto: {
       type: String,
       default: null,
@@ -35,9 +37,9 @@ const studentSchema = new mongoose.Schema(
 
     // 🏫 Academic Info
     session: { type: String, required: true },
-    className: { type: String, required: true }, // class
+    className: { type: String, required: true },
     section: { type: String },
-    rollNo: { type: String }, // regNo
+    rollNo: { type: String },
 
     // 🏠 Address
     address1: { type: String },
@@ -60,46 +62,22 @@ const studentSchema = new mongoose.Schema(
     discount: { type: String, default: "N/A" },
 
     // 📄 Documents
-    tc: {
-      type: String,
-      enum: ["Yes", "No"],
-      default: "No",
-    },
-    charCert: {
-      type: String,
-      enum: ["Yes", "No"],
-      default: "No",
-    },
-    reportCard: {
-      type: String,
-      enum: ["Yes", "No"],
-      default: "No",
-    },
-    dobCert: {
-      type: String,
-      enum: ["Yes", "No"],
-      default: "No",
-    },
+    tc: { type: String, enum: ["Yes", "No"], default: "No" },
+    charCert: { type: String, enum: ["Yes", "No"], default: "No" },
+    reportCard: { type: String, enum: ["Yes", "No"], default: "No" },
+    dobCert: { type: String, enum: ["Yes", "No"], default: "No" },
 
     // Benefit Remark
     feeBenefit: {
-      hasFeeBenefit: {
-        type: Boolean,
-        default: false,
-      },
-      description: {
-        type: String,
-      },
-
-      approvedAt: {
-        type: Date,
-      },
+      hasFeeBenefit: { type: Boolean, default: false },
+      description: { type: String },
+      approvedAt: { type: Date },
     },
 
     // 🖼️ Student Photo
-    photo: { type: String, default: null }, // file path / url
+    photo: { type: String, default: null },
 
-    // 🔗 Ledger Reference (IMPORTANT – keep this)
+    // 🔗 Ledger Reference
     ledgerId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "FeeLedger",
