@@ -35,7 +35,7 @@ const port = process.env.PORT || 8000;
 //origins changed
 const allowedOrigins = [
   "http://localhost:5173",
-  "https://demoschool.aadishrisoftech.com",
+  "https://www.greenfieldschools.in",
 ];
 
 app.use(
