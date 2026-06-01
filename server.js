@@ -20,6 +20,10 @@ import receiptRoutes from "./routes/receiptRoutes.js";
 import adminRoutes from "./routes/adminRoutes.js";
 import idCardRoutes from "./routes/idCardRoutes.js";
 import enquiryRoutes from "./routes/enquiryRoutes.js";
+import bannerRoutes from "./routes/bannerRoutes.js";
+import galleryRoutes from "./routes/galleryRoutes.js";
+import noticeRoutes from "./routes/noticeRoutes.js";
+import eventRoutes from "./routes/eventRoutes.js";
 
 // Connect to database
 connectDb();
@@ -66,6 +70,10 @@ app.use("/api/v1/receipt", receiptRoutes);
 app.use("/api/v1/idcard", idCardRoutes);
 app.use("/api/v1/admin", adminRoutes);
 app.use("/api/v1/enquiry", enquiryRoutes);
+app.use("/api/v1/banner", bannerRoutes);
+app.use("/api/v1/gallery", galleryRoutes);
+app.use("/api/v1/notice", noticeRoutes);
+app.use("/api/v1/event", eventRoutes);
 
 app.get("/", (req, res) => {
   res.send("Hello from Fee Collect server!");
