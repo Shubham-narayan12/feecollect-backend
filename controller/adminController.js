@@ -142,8 +142,8 @@ export const loginAdmin = async (req, res, next) => {
     // 🍪 Set token in HTTP-only cookie
     res.cookie("token", token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production", // true in prod
-      sameSite: "strict",
+      secure: true,
+      sameSite: "None",
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
@@ -183,5 +183,22 @@ export const logoutAdmin = async (req, res) => {
       success: false,
       message: "Logout failed",
     });
+  }
+};
+
+//GET ME
+export const getMe = async (req, res) => {
+  try {
+    const token = req.cookies.token;
+
+    if (!token) {
+      return res.status(401).json({ success: false });
+    }
+
+    return res.status(200).json({
+      success: true,
+    });
+  } catch (err) {
+    res.status(401).json({ success: false });
   }
 };
