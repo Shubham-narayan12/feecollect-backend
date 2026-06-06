@@ -36,6 +36,7 @@ const port = process.env.PORT || 8000;
 const allowedOrigins = [
   "http://localhost:5173",
   "https://www.greenfieldschools.in",
+  "https://greenfieldschools.in/",
 ];
 
 app.use(
