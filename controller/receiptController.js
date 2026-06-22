@@ -108,7 +108,7 @@ export const receiptCollectFee = async (req, res) => {
   }
 };
 
-// DOWNLOAD RECEIPT & AUTO DELETE
+// DOWNLOAD RECEIPT AFTER FEE COLLECT
 export const downloadReceipt = async (req, res) => {
   try {
     const { fileName } = req.params;
@@ -212,6 +212,39 @@ export const searchReceipts = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: error.message,
+    });
+  }
+};
+
+// Get Receipt By ID
+export const getReceiptById = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const receipt = await Receipt.findById(id).populate(
+      "studentId",
+      "studentName fatherName mobile photo",
+    );
+
+    if (!receipt) {
+      return res.status(404).json({
+        success: false,
+        message: "Receipt not found",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Receipt fetched successfully",
+      data: receipt,
+    });
+  } catch (error) {
+    console.log("Get Receipt Error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Server Error",
+      error: error.message,
     });
   }
 };
