@@ -6,68 +6,103 @@ export const generateReceiptPDF = async (receipt) => {
   return new Promise((resolve, reject) => {
     try {
       const fileName = `${receipt.receiptNo}.pdf`;
-      // Use /tmp for Vercel serverless environment
+
       const receiptsDir = process.env.VERCEL
         ? "/tmp/receipts"
         : path.join("uploads", "receipts");
 
-      // Ensure directory exists
       if (!fs.existsSync(receiptsDir)) {
         fs.mkdirSync(receiptsDir, { recursive: true });
       }
 
       const pdfPath = path.join(receiptsDir, fileName);
 
-      const doc = new PDFDocument({ size: "A4", margin: 50 });
+      // ================= A5 SIZE =================
+
+      const doc = new PDFDocument({
+        size: "A5",
+        margin: 30,
+      });
+
       const stream = fs.createWriteStream(pdfPath);
       doc.pipe(stream);
 
-      /* ================= HEADER ================= */
+      /*
+      ================= HEADER =================
+      */
+
+      doc.fontSize(15).text("GREEN FIELD SCHOOL", {
+        align: "center",
+      });
+
       doc
-        .fontSize(18)
-        .text("THAWE CENTRAL SCHOOL", { align: "center" })
-        .fontSize(10)
+        .fontSize(8)
         .text("BEDUTOLA, POST OFFICE-THAWE, GOPALGANJ PIN-841440", {
           align: "center",
-        })
-        .moveDown(0.8);
+        });
 
-      doc.moveTo(50, doc.y).lineTo(545, doc.y).stroke();
+      doc.moveDown(0.5);
+
+      doc.moveTo(30, doc.y).lineTo(390, doc.y).stroke();
+
+      doc.moveDown(0.7);
+
+      /*
+      ================= RECEIPT INFO =================
+      */
+
+      doc.fontSize(9);
+
+      doc.text(`Receipt No : ${receipt.receiptNo}`, 30, doc.y);
+
+      doc.text(`Date : ${new Date().toLocaleDateString()}`, 280, doc.y - 11);
+
       doc.moveDown(1);
 
-      /* ================= RECEIPT INFO ================= */
-      doc
-        .fontSize(11)
-        .text(`Receipt No : ${receipt.receiptNo}`, 50, doc.y, {
-          continued: true,
-        })
-        .text(`Date : ${new Date().toLocaleDateString()}`, { align: "right" })
-        .moveDown(1);
+      /*
+      ================= STUDENT INFO LEFT =================
+      */
 
-      /* ================= STUDENT INFO ================= */
-      doc
-        .fontSize(11)
-        .text(`Student Name : ${receipt.studentName}`)
-        .text(`Father Name  : ${receipt.fatherName}`)
-        .text(`Class / Section : ${receipt.className} - ${receipt.section}`)
-        .text(`Roll No : ${receipt.rollNo}`)
-        .moveDown(1);
+      doc.fontSize(9);
 
-      doc.moveTo(50, doc.y).lineTo(545, doc.y).stroke();
-      doc.moveDown(0.8);
+      let infoY = doc.y + 8;
 
-      /* ================= TABLE HEADER ================= */
-      let y = doc.y;
-      doc.fontSize(11).text("SL", 50, y);
-      doc.text("DESCRIPTION", 100, y);
-      doc.text("AMOUNT (₹)", 450, y, { align: "right" });
+      const studentInfo = [
+        ["Student Name", receipt.studentName],
+        ["Father Name", receipt.fatherName],
+        ["Class / Section", `${receipt.className} - ${receipt.section}`],
+        ["Roll No", receipt.rollNo],
+      ];
 
-      y += 15;
-      doc.moveTo(50, y).lineTo(545, y).stroke();
+      studentInfo.forEach((item) => {
+        doc.text(`${item[0]} :`, 30, infoY);
 
-      /* ================= TABLE BODY ================= */
-      let sl = 1;
+        doc.text(item[1] || "", 130, infoY);
+
+        infoY += 14;
+      });
+
+      doc.moveTo(30, infoY).lineTo(390, infoY).stroke();
+
+      /*
+      ================= TABLE =================
+      */
+
+      let y = infoY + 15;
+
+      doc.fontSize(9);
+
+      doc.text("SL", 35, y);
+      doc.text("DESCRIPTION", 70, y);
+      doc.text("AMOUNT", 310, y);
+
+      y += 12;
+
+      doc.moveTo(30, y).lineTo(390, y).stroke();
+
       y += 8;
+
+      let sl = 1;
 
       const monthsText =
         receipt.months && receipt.months.length
@@ -76,61 +111,66 @@ export const generateReceiptPDF = async (receipt) => {
 
       const addRow = (label, value) => {
         if (value > 0) {
-          doc.fontSize(11).text(sl++, 50, y);
-          doc.text(label, 100, y);
-          doc.text(value.toFixed(2), 450, y, { align: "right" });
-          y += 18;
+          doc.text(sl++, 35, y);
+
+          doc.text(label, 70, y, {
+            width: 220,
+          });
+
+          doc.text(value.toFixed(2), 310, y);
+
+          y += 14;
         }
       };
 
-      // Tuition + Transport with months
       addRow(`Tuition Fee${monthsText}`, receipt.tuitionFee);
+
       addRow(`Transport Fee${monthsText}`, receipt.transportFee);
 
-      // Admission & Annual
       addRow("Admission Fee", receipt.admissionFee);
+
       addRow("Annual Fee", receipt.annualFee);
 
-      // Extra Fees (Exam / Books / Uniform etc.)
       receipt.extraFees?.forEach((f) => {
         addRow(f.title, f.amount);
       });
 
-      y += 5;
-      doc.moveTo(50, y).lineTo(545, y).stroke();
+      doc.moveTo(30, y).lineTo(390, y).stroke();
+
       y += 12;
 
-      /* ================= TOTALS ================= */
-      const rightText = (label, value) => {
-        doc.text(label, 300, y);
-        doc.text(value.toFixed(2), 450, y, { align: "right" });
-        y += 16;
+      /*
+      ================= TOTAL =================
+      */
+
+      const totalRow = (title, value) => {
+        doc.text(title, 220, y);
+
+        doc.text(value.toFixed(2), 310, y);
+
+        y += 14;
       };
 
-      rightText("Total Amount", receipt.totalAmount);
+      totalRow("Total Amount", receipt.totalAmount);
 
-      y += 5;
-      doc.moveTo(300, y).lineTo(545, y).stroke();
-      y += 12;
+      totalRow("Paid Amount", receipt.paidAmount);
 
-      rightText("Paid Amount", receipt.paidAmount);
-      rightText("Due Amount", receipt.dueAmount);
+      totalRow("Due Amount", receipt.dueAmount);
 
-      y += 20;
+      y += 10;
 
-      /* ================= FOOTER ================= */
-      doc
-        .fontSize(11)
-        .text(`Payment Mode : ${receipt.paymentMode}`, 50, y)
-        .moveDown(2);
+      doc.text(`Payment Mode : ${receipt.paymentMode}`, 30, y);
 
-      doc.text("Prepared By : Admin", 50, doc.y);
-      doc.text("Authorised Signatory", 400, doc.y + 40);
+      y += 35;
+
+      doc.text("Prepared By : Admin", 30, y);
+
+      doc.text("Authorised Signatory", 250, y);
 
       doc.end();
 
       stream.on("finish", () => {
-        resolve(`${fileName}`);
+        resolve(fileName);
       });
     } catch (err) {
       reject(err);
